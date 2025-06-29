@@ -1,5 +1,5 @@
 //
-// route.rs - IPv4 Routing and Neighbor Table Management for AF_XDP
+// router.rs - IPv4 Routing and Neighbor Table Management for AF_XDP
 //
 // Purpose:
 //   This module provides efficient access to the IPv4 routing table and neighbor (ARP) cache
