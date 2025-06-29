@@ -1,0 +1,26 @@
+[package]
+name = "xdp-socket"
+version = "0.1.0"
+edition = "2024"
+
+authors.workspace = true
+#edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+libc = { workspace = true }
+log = { workspace = true }
+ipnet = { version = "2.11.0" }
+prefix-trie = {  version = "0.8.1" }
+libbpf-sys = {  workspace = true }
+netlink-sys = { version = "0.8.7" }
+netlink-packet-route = {  version = "0.24.0" }
+netlink-packet-core = { version = "0.7.0"}
+#tokio = { workspace = true, features = ["macros","rt-multi-thread"] }
+#aya = { version = "0.13.1", features = ["async_tokio"] }
