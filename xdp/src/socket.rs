@@ -1,3 +1,25 @@
+//
+// socket.rs - AF_XDP Socket and Queue Management
+//
+// Purpose:
+//   This module provides abstractions for creating, configuring, and managing AF_XDP sockets
+//   and their associated memory rings and queues. It is essential for high-performance packet
+//   processing in user space using the AF_XDP Linux feature.
+//
+// How it works:
+//   - Wraps low-level AF_XDP socket operations, including socket creation, binding, and ring
+//     buffer management.
+//   - Manages UMEM (user memory) allocation and mapping for zero-copy packet I/O.
+//   - Supports configuration for direction (Rx, Tx, Both), queue selection, and zero-copy mode.
+//   - Handles feature detection and error reporting for device capabilities.
+//
+// Main components:
+//   - AfXdpSocket: Main struct for managing an AF_XDP socket and its resources.
+//   - AfXdpConfig: Configuration options for socket creation and behavior.
+//   - Direction, QueueId, DeviceQueue: Types for controlling socket direction and queue mapping.
+//   - Internal helpers for ring setup, UMEM mapping, and device feature checks.
+//
+
 use crate::mmap::{OwnedMmap, Ring, XdpDesc, mmap_ring};
 use std::cmp::PartialEq;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};

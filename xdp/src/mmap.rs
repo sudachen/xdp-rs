@@ -1,3 +1,23 @@
+//
+// mmap.rs - Memory Mapping for AF_XDP Rings and UMEM
+//
+// Purpose:
+//   This module provides safe and ergonomic abstractions for memory mapping (mmap) of AF_XDP
+//   ring buffers and UMEM regions. It is essential for enabling zero-copy packet I/O between
+//   user space and the kernel.
+//
+// How it works:
+//   - Wraps low-level mmap operations for XDP rings (Rx, Tx, Fill, Comp) and UMEM.
+//   - Provides safe Rust types for managing mapped memory and ring access.
+//   - Handles offset calculations, alignment, and size checks for AF_XDP ring layouts.
+//
+// Main components:
+//   - RingMmap, OwnedMmap: Safe wrappers for memory-mapped regions.
+//   - Ring<T>: Abstraction for XDP ring buffer access and management.
+//   - mmap_ring, mmap_ring_at: Functions for mapping rings with correct offsets and permissions.
+//   - Utility helpers for pointer arithmetic, offset handling, and ring setup.
+//
+
 use std::sync::atomic::AtomicU32;
 use std::{io, ptr};
 

@@ -1,3 +1,29 @@
+//
+// route.rs - IPv4 Routing and Neighbor Table Management for AF_XDP
+//
+// Purpose:
+//   This module provides efficient access to the IPv4 routing table and neighbor (ARP) cache
+//   for a given network interface. It enables fast next-hop resolution (gateway and MAC address)
+//   for outgoing packets, which is essential for high-performance networking with AF_XDP.
+//
+// How it works:
+//   - Uses netlink (via netlink_packet_core and netlink_packet_route) to fetch and parse kernel
+//     routing and neighbor tables.
+//   - Caches routes and neighbors in fast in-memory structures (prefix trie for routes, hashmap
+//     for neighbors).
+//   - Provides API to refresh the cache, look up next hops, and retrieve gateway or neighbor
+//     information for a given destination.
+//
+// Main components:
+//   - Router: Main struct, maintains per-interface routing and neighbor cache, provides lookup
+//     and refresh methods.
+//   - Ipv4Route: Represents a single IPv4 route entry (prefix, gateway, output interface).
+//   - Neighbor: Represents a single ARP entry (IP, MAC, interface).
+//   - Gateway: Represents a default gateway.
+//   - Core functions: get_ipv4_routes, get_neighbors, find_default_gateway, netlink (generic
+//     netlink query helper).
+//
+
 use std::collections::HashMap;
 use netlink_packet_core::{
     NLM_F_DUMP, NLM_F_REQUEST, NetlinkDeserializable, NetlinkMessage, NetlinkPayload,
@@ -13,6 +39,7 @@ use std::io;
 use std::net::{Ipv4Addr};
 use prefix_trie::PrefixMap;
 use ipnet::Ipv4Net;
+
 impl Router {
     pub fn new(if_index: u32) -> Self {
         Router { if_index, routes: PrefixMap::new(), neighbors: HashMap::new() }
