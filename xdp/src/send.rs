@@ -1,5 +1,4 @@
-use crate::Direction;
-use crate::socket::AfXdpSocket;
+use crate::socket::{AfXdpSocket, Direction};
 use std::os::fd::AsRawFd;
 use std::sync::atomic::Ordering;
 use std::{io, ptr};

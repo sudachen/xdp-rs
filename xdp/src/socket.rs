@@ -12,7 +12,7 @@ use std::{io, ptr};
          all frames for outgoing packets.
        For Rx direction, it uses
          all frames for incoming packets.
-       For Full direction, it uses
+       For Both direction, it uses
         2048 frames for outgoing packets and 2048 frames for incoming packets.
 
    By default, zero-copy is enabled if the network interface supports it,
@@ -52,6 +52,13 @@ impl AfXdpSocket {
             }
             opts.feature_flags as u32
         };
+        
+        if direction != Direction::Tx && (bpf_features & 2/*NETDEV_XDP_ACT_REDIRECT*/ == 0) {
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "Device does not support XDP redirection",
+            ));
+        }
 
         let fd = unsafe {
             let fd = libc::socket(libc::AF_XDP, libc::SOCK_RAW | libc::SOCK_CLOEXEC, 0);
@@ -184,7 +191,7 @@ impl AfXdpSocket {
             )
         };
 
-        let zero_copy = match bpf_features & libbpf_sys::XDP_FLAGS_DRV_MODE != 0 {
+        let zero_copy = match bpf_features & 8/*NETDEV_XDP_ACT_XSK_ZEROCOPY*/ != 0 {
             true if !config.and_then(|cfg| cfg.no_zero_copy).unwrap_or(false) => libc::XDP_ZEROCOPY,
             _ => libc::XDP_COPY,
         };
