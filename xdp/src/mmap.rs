@@ -27,6 +27,24 @@ impl OwnedMmap {
     pub fn new(ptr: *mut libc::c_void, size: usize) -> Self {
         OwnedMmap(ptr, size)
     }
+    pub fn mmap(aligned_size: usize, huge_page: bool) -> Result<Self, io::Error> {
+        let ptr = unsafe {
+            libc::mmap(
+                ptr::null_mut(),
+                aligned_size,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_PRIVATE
+                    | libc::MAP_ANONYMOUS
+                    | if huge_page { libc::MAP_HUGETLB } else { 0 },
+                -1,
+                0,
+            )
+        };
+        if ptr == libc::MAP_FAILED {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(OwnedMmap(ptr, aligned_size))
+    }
     pub fn as_void_ptr(&self) -> *mut libc::c_void {
         self.0
     }
@@ -35,6 +53,9 @@ impl OwnedMmap {
     }
     pub fn len(&self) -> usize {
         self.1
+    }
+    pub fn is_empty(&self) -> bool {
+        self.1 == 0
     }
 }
 
@@ -84,6 +105,20 @@ pub struct Ring<T> {
     pub size: usize,
 }
 
+impl<T> Ring<T> {
+    pub fn mmap(
+        fd: i32,
+        size: usize,
+        ring_type: u64,
+        offsets: &libc::xdp_ring_offset,
+    ) -> Result<Self, io::Error> {
+        Ok(Ring::<T> {
+            mmap: mmap_ring(fd, size * size_of::<T>(), offsets, ring_type)?,
+            size,
+        })
+    }
+}
+
 impl Ring<u64> {
     pub fn fill(&self, start_frame: u64) {
         unsafe {
@@ -95,7 +130,7 @@ impl Ring<u64> {
     }
 }
 
-pub fn mmap_ring_at<T>(
+pub fn mmap_ring<T>(
     fd: i32,
     size: usize,
     offsets: &libc::xdp_ring_offset,
@@ -125,17 +160,5 @@ pub fn mmap_ring_at<T>(
         consumer,
         desc,
         flags,
-    })
-}
-
-pub fn mmap_ring<T>(
-    fd: i32,
-    size: usize,
-    ring_type: u64,
-    offsets: &libc::xdp_ring_offset,
-) -> Result<Ring<T>, io::Error> {
-    Ok(Ring::<T> {
-        mmap: mmap_ring_at(fd, size * size_of::<T>(), &offsets, ring_type)?,
-        size,
     })
 }

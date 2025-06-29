@@ -24,31 +24,35 @@
 //     netlink query helper).
 //
 
-use std::collections::HashMap;
+use ipnet::Ipv4Net;
 use netlink_packet_core::{
     NLM_F_DUMP, NLM_F_REQUEST, NetlinkDeserializable, NetlinkMessage, NetlinkPayload,
     NetlinkSerializable,
 };
-use netlink_packet_route::neighbour::{
-    NeighbourAddress, NeighbourAttribute, NeighbourCacheInfo, NeighbourMessage,
+use netlink_packet_route::{
+    AddressFamily, RouteNetlinkMessage,
+    neighbour::{NeighbourAddress, NeighbourAttribute, NeighbourMessage},
+    route::{RouteAddress, RouteAttribute, RouteMessage},
 };
-use netlink_packet_route::route::{RouteAddress, RouteAttribute, RouteMessage};
-use netlink_packet_route::{AddressFamily, RouteNetlinkMessage};
 use netlink_sys::{Socket, SocketAddr};
-use std::io;
-use std::net::{Ipv4Addr};
 use prefix_trie::PrefixMap;
-use ipnet::Ipv4Net;
+use std::collections::HashMap;
+use std::io;
+use std::net::Ipv4Addr;
 
 impl Router {
     pub fn new(if_index: u32) -> Self {
-        Router { if_index, routes: PrefixMap::new(), neighbors: HashMap::new() }
+        Router {
+            if_index,
+            routes: PrefixMap::new(),
+            neighbors: HashMap::new(),
+        }
     }
     pub fn route(&mut self, dest_ip: Ipv4Addr) -> Option<NextHop> {
         let dest_net = Ipv4Net::from(dest_ip);
-        if let Some((_,route)) = self.routes.get_lpm(&dest_net) {
+        if let Some((_, route)) = self.routes.get_lpm(&dest_net) {
             let ip = route.gateway.unwrap_or(dest_ip);
-            if let Some(neighbour) =  self.neighbors.get(&ip) {
+            if let Some(neighbour) = self.neighbors.get(&ip) {
                 return Some(NextHop {
                     ip_addr: ip,
                     mac_addr: Some(neighbour.mac),
@@ -62,14 +66,12 @@ impl Router {
         let neighbors = get_neighbors(Some(self.if_index))?;
         let mut prefix_map = PrefixMap::new();
         for route in routes.drain(..) {
-            let dest_net = Ipv4Net::new(route.destination, route.dest_prefix)
-                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Invalid destination prefix"))?;
+            let dest_net = Ipv4Net::new(route.destination, route.dest_prefix).map_err(|_| {
+                io::Error::new(io::ErrorKind::InvalidData, "Invalid destination prefix")
+            })?;
             prefix_map.insert(dest_net, route);
-        }                
-        self.neighbors = neighbors
-            .into_iter()
-            .map(|n| (n.ip, n))
-            .collect();
+        }
+        self.neighbors = neighbors.into_iter().map(|n| (n.ip, n)).collect();
         self.routes = prefix_map;
         Ok(())
     }
@@ -122,25 +124,20 @@ where
     req.finalize();
     req.serialize(&mut send_buf);
     if socket.send(send_buf.as_slice(), 0)? != send_buf.len() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Failed to send request",
-        ));
+        return Err(io::Error::other("Failed to send request"));
     };
 
-    let (mut recv_buf, _) = socket.recv_from_full()?;
+    let (recv_buf, _) = socket.recv_from_full()?;
     let mut buffer_view = &recv_buf[..];
     let mut result = Vec::new();
     while !buffer_view.is_empty() {
-        let msg = NetlinkMessage::<T>::deserialize(&buffer_view)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let msg = NetlinkMessage::<T>::deserialize(buffer_view).map_err(io::Error::other)?;
         let len = msg.header.length as usize;
         if let Some(r) = f(msg)? {
             result.push(r);
         }
         if len == 0 || len > buffer_view.len() {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
+            return Err(io::Error::other(
                 "Received a malformed netlink message (invalid length)".to_string(),
             ));
         }
@@ -175,9 +172,9 @@ pub fn get_neighbors(if_index: Option<u32>) -> Result<Vec<Neighbor>, io::Error> 
                             return Ok(None);
                         }
                     }
-                    NeighbourAttribute::CacheInfo(nfo) => {
-                        // TODO: ????
-                    }
+                    //NeighbourAttribute::CacheInfo(_nfo) => {
+                    //
+                    //}
                     _ => {}
                 }
             }
@@ -188,10 +185,10 @@ pub fn get_neighbors(if_index: Option<u32>) -> Result<Vec<Neighbor>, io::Error> 
 }
 
 pub fn get_ipv4_routes(if_index: Option<u32>) -> Result<Vec<Ipv4Route>, io::Error> {
-    let mut route_message = RouteMessage::default();
-    route_message.header.address_family = AddressFamily::Inet;
-    route_message.header.destination_prefix_length = 32;
-    let mut req = NetlinkMessage::from(RouteNetlinkMessage::GetRoute(route_message));
+    let mut req_msg = RouteMessage::default();
+    req_msg.header.address_family = AddressFamily::Inet;
+    //req_msg.header.destination_prefix_length = 32;
+    let req = NetlinkMessage::from(RouteNetlinkMessage::GetRoute(req_msg));
     netlink(req, |msg| {
         match msg.payload {
             NetlinkPayload::InnerMessage(RouteNetlinkMessage::NewRoute(ref route_msg)) => {
@@ -276,11 +273,4 @@ fn list_neighbors() {
     for n in neighbors {
         println!("Neighbor: {:#?}", n);
     }
-}
-fn bytes_to_hex_string(bytes: &[u8]) -> String {
-    bytes
-        .iter()
-        .map(|b| format!("{:02X}", b)) // Convert each byte to a 2-digit uppercase hex string
-        .collect::<Vec<String>>() // Collect the strings into a vector
-        .join(" ") // Join the elements of the vector with a space
 }

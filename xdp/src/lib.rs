@@ -1,8 +1,11 @@
 pub mod mmap;
-pub mod socket;
+pub mod router;
 pub mod send;
-mod route;
+pub mod socket;
 
-pub use route::{Router, Ipv4Route, Neighbor, NextHop, netlink, get_neighbors, get_ipv4_routes, find_default_gateway};
-pub use socket::{AfXdpSocket, AfXdpConfig, Direction, QueueId, DeviceQueue};
-pub use send::{Transmitter};
+pub use router::{
+    Ipv4Route, Neighbor, NextHop, Router, find_default_gateway, get_ipv4_routes, get_neighbors,
+    netlink,
+};
+pub use send::Transmitter;
+pub use socket::{AfXdpConfig, AfXdpSocket, DeviceQueue, Direction, QueueId};
