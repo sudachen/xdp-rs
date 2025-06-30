@@ -25,6 +25,7 @@ netlink-packet-core = { version = "0.7.0"}
 etherparse = {  version = "0.18" }
 tokio = { workspace = true, features = ["full"] }
 tokio-util = { workspace = true }
+exec = { version = "0.3.1" }
 caps = { workspace = true }
 #aya = { version = "0.13.1", features = ["async_tokio"] }
 
@@ -34,3 +35,4 @@ env_logger = { version = "0.11" }
 [[test]]
 name = "pingpong"
 path = "tests/pingpong.rs"
+harness = false

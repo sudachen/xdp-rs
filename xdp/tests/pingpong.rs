@@ -1,12 +1,14 @@
 pub mod suite;
-use std::io::{Result,Error};
+pub mod xdp;
 
-#[tokio::test]
+use std::io::Result;
+
+#[tokio::main]
 pub async fn main() -> Result<()> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug")).init();
-    let caps = caps::read(None,caps::CapSet::Permitted).map_err(|e| Error::other(e.to_string()))?;
-    log::info!("Current capabilities: {:?}", caps);
-
+    suite::command::setup(&[
+        caps::Capability::CAP_NET_ADMIN,
+        caps::Capability::CAP_NET_RAW,
+    ])?;
     let e = suite::runner::run_test_with_pair(|host_pair| async move {
         log::debug!("Running test");
         log::info!("starting pong host on {}", host_pair.host1.if_dev);
@@ -30,7 +32,7 @@ pub async fn main() -> Result<()> {
                 Ok(_) => log::info!("Pinger completed successfully on {}", host0_ip),
                 Err(e) => log::error!("Failed to complete pinger on {}: {}", host0_ip, e),
             }*/
-            match suite::xdp::xdp_pinger(&host1_ip,&host0_ip,9000) {
+            match xdp::xdp_pinger(&host1_ip, &host0_ip, 9000) {
                 Ok(_) => log::info!("Pinger completed successfully on {}", host0_ip),
                 Err(e) => log::error!("Failed to complete pinger on {}: {}", host0_ip, e),
             }
@@ -39,7 +41,8 @@ pub async fn main() -> Result<()> {
         ponger_shutdown.cancel();
         ponger.await?;
         Ok(())
-    }).await;
+    })
+    .await;
     if let Err(e) = e {
         log::error!("Pingpong test failed: {e}");
         Err(e)
