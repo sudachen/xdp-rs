@@ -1,3 +1,29 @@
+//
+// netlink.rs - A low-level interface to the Linux kernel's netlink routing subsystem.
+//
+// Purpose:
+//   This module provides functions to query the kernel for networking information, such as
+//   IPv4 routes, neighbor (ARP) entries, interface addresses, and link-layer details.
+//   It's essential for applications that need to understand the network topology and make
+//   routing decisions without relying on the standard library's higher-level abstractions.
+//
+// How it works:
+//   - It uses a raw `NETLINK_ROUTE` socket to communicate directly with the Linux kernel.
+//   - It leverages the `netlink_packet_core` and `netlink_packet_route` crates to build,
+//     serialize, and deserialize netlink messages.
+//   - A generic `netlink` function handles the common pattern of sending a request and
+//     processing a potentially multi-part response from the kernel.
+//   - Specific getter functions (`get_ipv4_routes`, `get_neighbors`, etc.) use the generic
+//     handler to fetch and parse different types of networking information.
+//
+// Main components:
+//   - Data Structures: `Link`, `Ipv4Route`, `Neighbor`, `Gateway` to represent kernel networking objects.
+//   - `netlink()`: A generic function for handling the netlink request/response flow.
+//   - Public API: `get_links()`, `get_ipv4_routes()`, `get_neighbors()`, `get_ipv4_address()` for querying
+//     specific kernel subsystems.
+//   - `find_default_gateway()`: A helper to identify the default gateway from a list of routes.
+//
+
 use netlink_packet_core::{
     NLM_F_DUMP, NLM_F_REQUEST, NetlinkDeserializable, NetlinkMessage, NetlinkPayload,
     NetlinkSerializable,
@@ -245,4 +271,3 @@ pub fn find_default_gateway(routes: &[Ipv4Route]) -> Option<Gateway> {
             priority,
         })
 }
-

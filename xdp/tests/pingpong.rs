@@ -1,3 +1,22 @@
+//
+// pingpong.rs - Integration Test for XDP-based Ping
+//
+// Purpose:
+//   This file contains an integration test to verify the end-to-end functionality of the XDP
+//   pinger. It ensures that the XDP program can correctly assemble, address, and transmit a
+//   UDP packet that can be received and understood by a standard UDP server.
+//
+// How it works:
+//   - It requires elevated privileges (CAP_NET_ADMIN, CAP_NET_RAW) to create network namespaces
+//     and use AF_XDP sockets.
+//   - It uses a test harness (`suite::runner`) to create a virtual network environment with a
+//     pair of connected hosts (`host0` and `host1`).
+//   - A standard UDP "pong" server is started on `host1`.
+//   - The XDP-based pinger (`xdp::xdp_pinger`) is started on `host0`, which sends a ping to the
+//     pong server on `host1`.
+//   - The test succeeds if the ping-pong communication completes successfully.
+//
+
 pub mod suite;
 pub mod xdp;
 

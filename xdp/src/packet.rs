@@ -1,3 +1,26 @@
+//
+// packet.rs - UDP Packet Header Construction
+//
+// Purpose:
+//   This module provides a utility function to construct the necessary headers for a UDP/IPv4
+//   packet (Ethernet, IP, and UDP). It is designed for high-performance scenarios where
+//   applications, such as those using AF_XDP, need to manually craft packets before sending.
+//
+// How it works:
+//   - It uses the `etherparse` crate's `PacketBuilder` to efficiently layer the Ethernet II,
+//     IPv4, and UDP headers.
+//   - The headers are written directly into a fixed-size `[u8; 42]` array, avoiding heap
+//     allocations for the header itself.
+//   - A custom `HdrWrite` struct, which implements `std::io::Write`, acts as a temporary
+//     writer to capture the output from `PacketBuilder` into the array.
+//
+// Main components:
+//   - `write_udp_header_for()`: The primary function that takes source/destination MAC addresses,
+//     IP addresses, and ports, and returns a 42-byte array containing the complete packet header.
+//   - `HdrWrite`: A helper struct implementing `io::Write` to enable writing header data into a
+//     fixed-size buffer without extra allocations.
+//
+
 use std::net::Ipv4Addr;
 use std::io;
 use etherparse::{PacketBuilder};
