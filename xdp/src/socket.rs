@@ -189,7 +189,7 @@ impl AfXdpSocket {
 
         let sxdp = libc::sockaddr_xdp {
             sxdp_family: libc::AF_XDP as libc::sa_family_t,
-            sxdp_flags: /*libc::XDP_USE_NEED_WAKEUP | */ zero_copy,
+            sxdp_flags: libc::XDP_USE_NEED_WAKEUP | zero_copy,
             sxdp_ifindex: device_queue.if_index,
             sxdp_queue_id: device_queue.queue_id.0 as u32,
             sxdp_shared_umem_fd: 0,

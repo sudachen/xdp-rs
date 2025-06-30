@@ -53,7 +53,7 @@ pub fn up_pair(dev_prefix: &str, ip_prefix: &str) -> Result<()> {
 
 pub fn set_ipv4_addr(dev: &str, addr: &str) -> Result<()> {
     log::info!("setting IPv4 address {0} on {1}", addr, dev);
-    execute_sudo_command(&format!("ip addr add {0} dev {1}", addr, dev))?;
+    execute_sudo_command(&format!("ip addr add {0}/24 dev {1}", addr, dev))?;
     Ok(())
 }
 

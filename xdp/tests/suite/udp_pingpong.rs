@@ -13,6 +13,7 @@ pub fn run_pinger(local_addr: &str, remote_addr: &str) -> io::Result<()> {
     log::debug!("[UDP_Pinger] Sending 'PING' to {}...", remote_addr);
     socket.send(ping_message)?;
     let mut buffer = [0u8; 1024]; // A buffer to store received data.
+
     match socket.recv(&mut buffer) {
         Ok(number_of_bytes) => {
             let message = &buffer[..number_of_bytes];
@@ -38,7 +39,7 @@ pub fn run_pinger(local_addr: &str, remote_addr: &str) -> io::Result<()> {
 pub fn run_ponger(local_addr: &str, token: CancellationToken) -> io::Result<()> {
     let socket = UdpSocket::bind(local_addr)?;
     log::debug!("[UDP_Ponger] Listening on {}...", local_addr);
-    socket.set_read_timeout(Some(Duration::from_millis(300)))?;
+    //socket.set_read_timeout(Some(Duration::from_millis(300)))?;
     let mut buffer = [0u8; 1024];
     loop {
         match socket.recv_from(&mut buffer) {
@@ -55,7 +56,8 @@ pub fn run_ponger(local_addr: &str, token: CancellationToken) -> io::Result<()> 
                 break;
             }
             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock || e.kind() == io::ErrorKind::TimedOut => {
-                if token.is_cancelled() { break }
+                log::warn!("[UDP_Ponger] No data received, waiting for 'PING'... {e}");
+                //if token.is_cancelled() { break }
                 continue;
             }
             Err(e) => {

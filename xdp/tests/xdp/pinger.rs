@@ -14,8 +14,8 @@ pub fn xdp_pinger(src_ip: &str, src_port: u16, dst_ip: &str, dst_port: u16) -> R
         .ok_or_else(|| Error::other(format!("Source IP {} not found", src_ip)))?
         .1;
 
-    let src_mac = eui48::MacAddress::from_str("aa:79:ea:34:4b:b8").map_err(|e| Error::other(format!("invalid MAC address: {}", e)))?.to_array();
-    let dst_mac = eui48::MacAddress::from_str("fa:95:2c:e3:0e:a5").map_err(|e| Error::other(format!("invalid MAC address: {}", e)))?.to_array();
+    let src_mac = eui48::MacAddress::from_str("fa:95:2c:e3:0e:a5").map_err(|e| Error::other(format!("invalid MAC address: {}", e)))?.to_array();
+    let dst_mac = eui48::MacAddress::from_str("aa:79:ea:34:4b:b8").map_err(|e| Error::other(format!("invalid MAC address: {}", e)))?.to_array();
 
     let mut socket = AfXdpSocket::new(DeviceQueue::form_ifindex(if_index), Direction::Tx, None)
         .map_err(|e| Error::other(format!("Failed to create XDP socket: {}", e)))?;

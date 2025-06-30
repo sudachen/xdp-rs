@@ -92,7 +92,6 @@ impl Transmitter<'_> {
             buf[0..hdr_len].copy_from_slice(bs);
         }
         buf[hdr_len ..].copy_from_slice(data);
-        println!("{:?}",buf);
         tx_ring.increment(&mut tx_head);
         tx_ring.update_producer(tx_head);
         Ok(())
@@ -108,11 +107,6 @@ impl Transmitter<'_> {
             let c_ring = &mut self.0.c_ring;
             let c_head = c_ring.consumer();
             let c_tail = c_ring.producer();
-            println!("C|{c_head},{c_tail}|");
-            let tx_ring = &mut self.0.tx_ring;
-            let tx_head = tx_ring.consumer();
-            let tx_tail = tx_ring.producer();
-            println!("TX|{tx_head},{tx_tail},{}|",self.0.tx_tail);
             if c_tail != c_head { break } // no completed chunks, exit loop
         }
         Ok(())
@@ -120,14 +114,9 @@ impl Transmitter<'_> {
     pub fn wait_for_transition(&mut self) -> Result<(), TransmitError> {
         loop {
             self.tx_wakeup().map_err(TransmitError::Io)?;
-            let c_ring = &mut self.0.c_ring;
-            let c_head = c_ring.consumer();
-            let c_tail = c_ring.producer();
-            println!("C|{c_head},{c_tail}|");
             let tx_ring = &mut self.0.tx_ring;
             let tx_head = tx_ring.consumer();
             let tx_tail = tx_ring.producer();
-            println!("TX|{tx_head},{tx_tail},{}|",self.0.tx_tail);
             if tx_tail == tx_head { break } // no completed chunks, exit loop
         }
         Ok(())

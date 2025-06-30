@@ -35,7 +35,7 @@ pub async fn main() -> Result<()> {
         let ponger_shutdown = tokio_util::sync::CancellationToken::new();
         let token = ponger_shutdown.clone();
         let ponger = tokio::task::spawn_blocking(move || {
-            match suite::udp_pingpong::run_ponger(&format!("{host1_ip}:9000"), token) {
+            match suite::udp_pingpong::run_ponger(&format!("{host1_ip}:9001"), token) {
                 Ok(_) => log::info!("Ponger completed successfully on {}", host1_ip),
                 Err(e) => log::error!("Failed to complete ponger on {}: {}", host1_ip, e),
             }
@@ -45,7 +45,7 @@ pub async fn main() -> Result<()> {
         let host0_ip = host_pair.host0.ip.clone();
         let host1_ip = host_pair.host1.ip.clone();
         let pinger = tokio::task::spawn_blocking(move || {
-            match xdp::xdp_pinger(&host0_ip, 9001, &host1_ip, 9000) {
+            match xdp::xdp_pinger(&host0_ip, 9000, &host1_ip, 9001) {
                 Ok(_) => log::info!("Pinger completed successfully on {}", host0_ip),
                 Err(e) => log::error!("Failed to complete pinger on {}: {}", host0_ip, e),
             }
@@ -57,7 +57,7 @@ pub async fn main() -> Result<()> {
             // }
         });
         pinger.await?;
-        ponger_shutdown.cancel();
+        //ponger_shutdown.cancel();
         ponger.await?;
         Ok(())
     })
