@@ -76,30 +76,63 @@ impl Transmitter<'_> {
             while c_tail != c_head {
                 // get completed chunk descriptor from completion ring
                 c_ring.increment(&mut c_head);
-                let mut desc = XdpDesc{ addr: c_ring.desc_at(c_head), len: 0, options: 0 };
+                let mut desc = XdpDesc { addr: c_ring.desc_at(c_head), len: 0, options: 0 };
                 c_ring.update_consumer(c_head);
                 // put it back to the tx_ring
                 desc.len = 0;
                 tx_ring.increment(&mut self.0.tx_tail);
                 *tx_ring.mut_desc_at(self.0.tx_tail) = desc;
             }
-            // copy data to the available chunk and update producer ptr on tx_ring
-            tx_ring.increment(&mut tx_head);
-            let hdr_len = header.map_or(0, |h| h.len());
-            let buf_len = data.len() + hdr_len;
-            let buf = tx_ring.mut_bytes_at(&mut self.0.umem, tx_head, buf_len);
-            if let Some(bs) = header {
-                buf[0..hdr_len].copy_from_slice(bs);
-            }
-            buf[hdr_len ..].copy_from_slice(data);
-            self.0.tx_ring.update_producer(tx_head);
         }
+        // copy data to the available chunk and update producer ptr on tx_ring
+        let hdr_len = header.map_or(0, |h| h.len());
+        let buf_len = data.len() + hdr_len;
+        let buf = tx_ring.mut_bytes_at(&mut self.0.umem, tx_head, buf_len);
+        if let Some(bs) = header {
+            buf[0..hdr_len].copy_from_slice(bs);
+        }
+        buf[hdr_len ..].copy_from_slice(data);
+        println!("{:?}",buf);
+        tx_ring.increment(&mut tx_head);
+        tx_ring.update_producer(tx_head);
         Ok(())
     }
     pub fn send_and_wakeup(&mut self, data: &[u8], header: Option<&[u8]>) -> Result<(), TransmitError> {
         self.send(data,header)?;
         self.tx_wakeup().map_err(TransmitError::Io)
     }
+
+    pub fn wait_for_completion(&mut self) -> Result<(), TransmitError> {
+        loop {
+            self.tx_wakeup().map_err(TransmitError::Io)?;
+            let c_ring = &mut self.0.c_ring;
+            let c_head = c_ring.consumer();
+            let c_tail = c_ring.producer();
+            println!("C|{c_head},{c_tail}|");
+            let tx_ring = &mut self.0.tx_ring;
+            let tx_head = tx_ring.consumer();
+            let tx_tail = tx_ring.producer();
+            println!("TX|{tx_head},{tx_tail},{}|",self.0.tx_tail);
+            if c_tail != c_head { break } // no completed chunks, exit loop
+        }
+        Ok(())
+    }
+    pub fn wait_for_transition(&mut self) -> Result<(), TransmitError> {
+        loop {
+            self.tx_wakeup().map_err(TransmitError::Io)?;
+            let c_ring = &mut self.0.c_ring;
+            let c_head = c_ring.consumer();
+            let c_tail = c_ring.producer();
+            println!("C|{c_head},{c_tail}|");
+            let tx_ring = &mut self.0.tx_ring;
+            let tx_head = tx_ring.consumer();
+            let tx_tail = tx_ring.producer();
+            println!("TX|{tx_head},{tx_tail},{}|",self.0.tx_tail);
+            if tx_tail == tx_head { break } // no completed chunks, exit loop
+        }
+        Ok(())
+    }
+
     pub fn tx_wakeup(&self) -> Result<(), io::Error> {
         let need_wakeup = unsafe {
             (*self.0.tx_ring.mmap.flags).load(Ordering::Relaxed) & libc::XDP_RING_NEED_WAKEUP != 0

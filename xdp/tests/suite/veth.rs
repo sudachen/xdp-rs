@@ -42,9 +42,11 @@ pub fn up_if_dev(dev: &str) -> Result<()> {
 pub fn up_pair(dev_prefix: &str, ip_prefix: &str) -> Result<()> {
     let dev= format!("{}0", dev_prefix); 
     set_ipv4_addr(&dev,&format!("{}100", ip_prefix))?;
+    set_promisc_mode(&dev,true)?;
     up_if_dev(&dev)?;
     let dev= format!("{}1", dev_prefix);
     set_ipv4_addr(&dev,&format!("{}101", ip_prefix))?;
+    set_promisc_mode(&dev,true)?;
     up_if_dev(&dev)?;
     Ok(())
 }
@@ -55,3 +57,9 @@ pub fn set_ipv4_addr(dev: &str, addr: &str) -> Result<()> {
     Ok(())
 }
 
+pub fn set_promisc_mode(dev: &str, enable: bool) -> Result<()> {
+    log::info!("setting promisc mode {0} on {dev}", if enable { "on" } else { "off" });
+    let mode = if enable { "on" } else { "off" };
+    execute_sudo_command(&format!("ip link set {0} promisc {1}", dev, mode))?;
+    Ok(())
+}

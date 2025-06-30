@@ -152,16 +152,16 @@ impl<T> Ring<T> where T: Copy
         unsafe { (*self.mmap.consumer).load(std::sync::atomic::Ordering::Acquire) }
     }
     pub fn producer(&self) -> u32 {
-        unsafe { (*self.mmap.consumer).load(std::sync::atomic::Ordering::Acquire) }
+        unsafe { (*self.mmap.producer).load(std::sync::atomic::Ordering::Acquire) }
     }
     pub fn update_producer(&mut self, value: u32) {
         unsafe {
-            (*self.mmap.producer).store(value, std::sync::atomic::Ordering::SeqCst);
+            (*self.mmap.producer).store(value, std::sync::atomic::Ordering::Release);
         }
     }
     pub fn update_consumer(&mut self, value: u32) {
         unsafe {
-            (*self.mmap.consumer).store(value, std::sync::atomic::Ordering::SeqCst);
+            (*self.mmap.consumer).store(value, std::sync::atomic::Ordering::Release);
         }
     }
     pub fn increment(&self, value: &mut u32) -> u32 {

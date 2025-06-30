@@ -3,7 +3,7 @@ use std::io::{Result, ErrorKind};
 use std::future::Future;
 
 pub const DEV_PREFIX: &str = "xdpVeth";
-pub const IP_PREFIX: &str = "244.178.44.";
+pub const IP_PREFIX: &str = "192.168.77.";
 
 pub struct Host {
     pub if_dev: String,

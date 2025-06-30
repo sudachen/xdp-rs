@@ -26,16 +26,16 @@ pub async fn main() -> Result<()> {
         let host0_ip = host_pair.host0.ip.clone();
         let host1_ip = host_pair.host1.ip.clone();
         let pinger = tokio::task::spawn_blocking(move || {
-            /*match suite::udp_pingpong::run_pinger(
-                &format!("{host0_ip}:9000"),
-                &format!("{host1_ip}:9000")) {
-                Ok(_) => log::info!("Pinger completed successfully on {}", host0_ip),
-                Err(e) => log::error!("Failed to complete pinger on {}: {}", host0_ip, e),
-            }*/
-            match xdp::xdp_pinger(&host1_ip, &host0_ip, 9000) {
+            match xdp::xdp_pinger(&host0_ip, 9001, &host1_ip, 9000) {
                 Ok(_) => log::info!("Pinger completed successfully on {}", host0_ip),
                 Err(e) => log::error!("Failed to complete pinger on {}: {}", host0_ip, e),
             }
+            // match suite::udp_pingpong::run_pinger(
+            //     &format!("{host0_ip}:9001"),
+            //     &format!("{host1_ip}:9000")) {
+            //     Ok(_) => log::info!("Pinger completed successfully on {}", host0_ip),
+            //     Err(e) => log::error!("Failed to complete pinger on {}: {}", host0_ip, e),
+            // }
         });
         pinger.await?;
         ponger_shutdown.cancel();

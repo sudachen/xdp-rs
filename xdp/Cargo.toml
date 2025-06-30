@@ -27,12 +27,18 @@ tokio = { workspace = true, features = ["full"] }
 tokio-util = { workspace = true }
 exec = { version = "0.3.1" }
 caps = { workspace = true }
-#aya = { version = "0.13.1", features = ["async_tokio"] }
 
 [dev-dependencies]
-env_logger = { version = "0.11" }
+eui48 = { version = "0.5.1" }
+env_logger = { workspace = true }
 
 [[test]]
 name = "pingpong"
 path = "tests/pingpong.rs"
 harness = false
+
+[[test]]
+name = "pong"
+path = "tests/tool_pong.rs"
+harness = false
+

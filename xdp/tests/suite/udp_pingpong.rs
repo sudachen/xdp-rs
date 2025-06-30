@@ -38,9 +38,9 @@ pub fn run_pinger(local_addr: &str, remote_addr: &str) -> io::Result<()> {
 pub fn run_ponger(local_addr: &str, token: CancellationToken) -> io::Result<()> {
     let socket = UdpSocket::bind(local_addr)?;
     log::debug!("[UDP_Ponger] Listening on {}...", local_addr);
-    socket.set_read_timeout(Some(Duration::from_millis(100)))?;
+    socket.set_read_timeout(Some(Duration::from_millis(300)))?;
     let mut buffer = [0u8; 1024];
-    while !token.is_cancelled() {
+    loop {
         match socket.recv_from(&mut buffer) {
             // A packet was successfully received.
             Ok((number_of_bytes, src_addr)) => {
@@ -52,17 +52,14 @@ pub fn run_ponger(local_addr: &str, token: CancellationToken) -> io::Result<()> 
                     let received_str = String::from_utf8_lossy(message);
                     log::debug!("[UDP_Ponger] Received unexpected: '{}'. Ignoring.", received_str);
                 }
+                break;
             }
-            // An error occurred.
             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock || e.kind() == io::ErrorKind::TimedOut => {
-                // This is the expected "error" when the timeout is reached.
-                // We do nothing here and let the loop check the cancellation token again.
+                if token.is_cancelled() { break }
                 continue;
             }
-            // A real error occurred.
             Err(e) => {
                 log::error!("[UDP_Ponger] A network error occurred: {}", e);
-                // We break the loop on a real error.
                 break;
             }
         }
