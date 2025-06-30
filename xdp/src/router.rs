@@ -33,12 +33,13 @@ use netlink_packet_route::{
     AddressFamily, RouteNetlinkMessage,
     neighbour::{NeighbourAddress, NeighbourAttribute, NeighbourMessage},
     route::{RouteAddress, RouteAttribute, RouteMessage},
+    address::{AddressMessage, AddressAttribute},
 };
 use netlink_sys::{Socket, SocketAddr};
 use prefix_trie::PrefixMap;
 use std::collections::HashMap;
 use std::io;
-use std::net::Ipv4Addr;
+use std::net::{IpAddr, Ipv4Addr};
 
 impl Router {
     pub fn new(if_index: u32) -> Self {
@@ -59,6 +60,12 @@ impl Router {
                 });
             }
         };
+        if let Some(neighbour) = self.neighbors.get(&dest_ip) {
+            return Some(NextHop {
+                ip_addr: dest_ip,
+                mac_addr: Some(neighbour.mac),
+            });
+        }
         None
     }
     pub fn refresh(&mut self) -> Result<(), io::Error> {
@@ -79,10 +86,11 @@ impl Router {
 
 pub struct Router {
     pub if_index: u32,
-    neighbors: HashMap<Ipv4Addr, Neighbor>,
-    routes: PrefixMap<Ipv4Net, Ipv4Route>,
+    pub neighbors: HashMap<Ipv4Addr, Neighbor>,
+    pub routes: PrefixMap<Ipv4Net, Ipv4Route>,
 }
 
+#[derive(Clone,Debug)]
 pub struct NextHop {
     pub ip_addr: Ipv4Addr,
     pub mac_addr: Option<[u8; 6]>,
@@ -226,6 +234,28 @@ pub fn get_ipv4_routes(if_index: Option<u32>) -> Result<Vec<Ipv4Route>, io::Erro
     })
 }
 
+pub fn get_ipv4_address(if_index: Option<u32>) -> Result<Vec<(Ipv4Addr,u32)>, io::Error> {
+    let mut req_msg = AddressMessage::default();
+    req_msg.header.family = AddressFamily::Inet;
+    let req = NetlinkMessage::from(RouteNetlinkMessage::GetAddress(req_msg));
+    netlink(req, |msg| {
+        match msg.payload {
+            NetlinkPayload::InnerMessage(RouteNetlinkMessage::NewAddress(ref addr_msg)) => {
+                if if_index.is_some_and(|x| x != addr_msg.header.index) {
+                    return Ok(None); // Skip addresses not matching the interface index
+                }
+                for attr in addr_msg.attributes.iter() {
+                    if let AddressAttribute::Address(IpAddr::V4(ip)) = attr {
+                        return Ok(Some((*ip,addr_msg.header.index)));
+                    }
+                }
+                Ok(None)
+            }
+            _ => Ok(None),
+        }
+    })
+}
+
 pub fn find_default_gateway(routes: &[Ipv4Route]) -> Option<Gateway> {
     routes
         .iter()
@@ -273,4 +303,10 @@ fn list_neighbors() {
     for n in neighbors {
         println!("Neighbor: {:#?}", n);
     }
+}
+
+#[test]
+fn test_list_addresses() {
+    let addr = get_ipv4_address(None).unwrap();
+    println!("Addresses: {:#?} ", addr);
 }

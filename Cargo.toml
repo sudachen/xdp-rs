@@ -18,8 +18,11 @@ rust-version = "1.85.0"
 anyhow = { version = "1", default-features = false }
 libc = { version = "0.2.105", default-features = false }
 tokio = { version = "1.24.0", default-features = false }
+tokio-util = { version = "0.7.10", default-features = false }
 log = { version = "0.4", default-features = false }
-libbpf-sys = {  version = "1.5", default-features = false }
+libbpf-sys = { version = "1.5", default-features = false }
+env_logger = { versin = "0.11", default-features = false }
+caps = { version = "0.5.5", default-features = false }
 
 [workspace.lints.clippy]
 unused_trait_names = "warn"

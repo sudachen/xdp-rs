@@ -20,6 +20,8 @@
 
 use std::sync::atomic::AtomicU32;
 use std::{io, ptr, slice};
+use std::fs::File;
+use std::io::{BufRead as _, BufReader};
 
 pub const FRAME_SIZE: usize = 2048;
 pub const FRAME_COUNT: usize = 4096;
@@ -30,7 +32,24 @@ impl OwnedMmap {
     pub fn new(ptr: *mut libc::c_void, size: usize) -> Self {
         OwnedMmap(ptr, size)
     }
-    pub fn mmap(aligned_size: usize, huge_page: bool) -> Result<Self, io::Error> {
+    pub fn mmap(size: usize, huge_page: Option<bool>) -> Result<Self, io::Error> {
+        // if not specified use huge pages, check if they are available
+        let huge_tlb = if let Some(yes) = huge_page { yes } else {
+            let info = get_hugepage_info()?;
+            if let (Some(x), Some(2048)) = (info.free, info.size_kb) {
+                x > 0
+            } else {
+                false
+            }
+        };
+        let page_size = {
+            if huge_tlb {
+                2 * 1024 * 1024 // 2MB huge page size
+            } else {
+                unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize }
+            }
+        };
+        let aligned_size = (size + page_size - 1) & !(page_size - 1);
         let ptr = unsafe {
             libc::mmap(
                 ptr::null_mut(),
@@ -38,7 +57,7 @@ impl OwnedMmap {
                 libc::PROT_READ | libc::PROT_WRITE,
                 libc::MAP_PRIVATE
                     | libc::MAP_ANONYMOUS
-                    | if huge_page { libc::MAP_HUGETLB } else { 0 },
+                    | if huge_tlb  { libc::MAP_HUGETLB | libc::MAP_HUGE_2MB } else { 0 },
                 -1,
                 0,
             )
@@ -65,24 +84,25 @@ impl OwnedMmap {
 impl Drop for OwnedMmap {
     fn drop(&mut self) {
         unsafe {
-            if self.0 != libc::MAP_FAILED {
+            if self.0 != libc::MAP_FAILED && !self.0.is_null() {
                 let res = libc::munmap(self.0, self.1);
                 if res < 0 {
-                    log::error!("Failed to unmap memory: {}", io::Error::last_os_error());
+                    log::error!("Failed to unmap memory: {}",
+                        io::Error::last_os_error());
                 }
             }
         }
     }
 }
 
-pub struct RingMmap {
+pub struct RingMmap<T> {
     pub mmap: OwnedMmap,
     pub producer: *mut AtomicU32,
     pub consumer: *mut AtomicU32,
-    pub desc: *mut XdpDesc,
+    pub desc: *mut T,
     pub flags: *mut AtomicU32,
 }
-impl Default for RingMmap {
+impl<T> Default for RingMmap<T> {
     fn default() -> Self {
         RingMmap {
             mmap: OwnedMmap(ptr::null_mut(), 0),
@@ -109,12 +129,13 @@ impl XdpDesc {
 }
 
 #[derive(Default)]
-pub struct Ring {
-    pub mmap: RingMmap,
+pub struct Ring<T> {
+    pub mmap: RingMmap<T>,
     pub len: usize,
 }
 
-impl Ring {
+impl<T> Ring<T> where T: Copy
+{
     pub fn mmap(
         fd: i32,
         len: usize,
@@ -122,8 +143,8 @@ impl Ring {
         offsets: &libc::xdp_ring_offset,
     ) -> Result<Self, io::Error> {
         debug_assert!(len.is_power_of_two());
-        Ok(Ring{
-            mmap: mmap_ring(fd, len * size_of::<XdpDesc>(), offsets, ring_type)?,
+        Ok(Ring {
+            mmap: mmap_ring(fd, len * size_of::<T>(), offsets, ring_type)?,
             len
         })
     }
@@ -144,20 +165,22 @@ impl Ring {
         }
     }
     pub fn increment(&self, value: &mut u32) -> u32 {
-        *value = (*value + 1) & (FRAME_COUNT -1) as u32;
+        *value = (*value + 1) & (FRAME_COUNT - 1) as u32;
         *value
     }
 
-    pub fn mut_desc_at(&mut self, index: u32) -> &mut XdpDesc {
+    pub fn mut_desc_at(&mut self, index: u32) -> &mut T {
         debug_assert!((index as usize) < self.len);
         unsafe { &mut *self.mmap.desc.add(index as usize) }
     }
 
-    pub fn desc_at(&self, index: u32) -> XdpDesc {
+    pub fn desc_at(&self, index: u32) -> T {
         debug_assert!((index as usize) < self.len);
         unsafe { *self.mmap.desc.add(index as usize) }
     }
+}
 
+impl Ring<XdpDesc> {
     pub fn fill(&mut self, start_frame: u32) {
         debug_assert!((start_frame as usize) < self.len);
         for i in 0 ..self.len as u32 {
@@ -191,12 +214,12 @@ impl Ring {
     }
 }
 
-pub fn mmap_ring(
+pub fn mmap_ring<T>(
     fd: i32,
     size: usize,
     offsets: &libc::xdp_ring_offset,
     ring_type: u64,
-) -> Result<RingMmap, io::Error> {
+) -> Result<RingMmap<T>, io::Error> {
     let map_size = (offsets.desc as usize).saturating_add(size);
     let map_addr = unsafe {
         libc::mmap(
@@ -213,7 +236,7 @@ pub fn mmap_ring(
     }
     let producer = unsafe { map_addr.add(offsets.producer as usize) as *mut AtomicU32 };
     let consumer = unsafe { map_addr.add(offsets.consumer as usize) as *mut AtomicU32 };
-    let desc = unsafe { map_addr.add(offsets.desc as usize) as *mut XdpDesc };
+    let desc = unsafe { map_addr.add(offsets.desc as usize) as *mut T };
     let flags = unsafe { map_addr.add(offsets.flags as usize) as *mut AtomicU32 };
     Ok(RingMmap {
         mmap: OwnedMmap(map_addr, map_size),
@@ -222,4 +245,33 @@ pub fn mmap_ring(
         desc,
         flags,
     })
+}
+
+#[derive(Debug, Default)]
+pub struct HugePageInfo {
+    pub size_kb: Option<u64>,
+    pub total: Option<u64>,
+    pub free: Option<u64>,
+}
+
+pub fn get_hugepage_info() -> io::Result<HugePageInfo> {
+    let file = File::open("/proc/meminfo")?;
+    let reader = BufReader::new(file);
+    let mut info = HugePageInfo::default();
+    for line in reader.lines() {
+        let line = line?;
+        let parts: Vec<&str> = line.split(':').collect();
+
+        if parts.len() == 2 {
+            let key = parts[0].trim();
+            let value_str = parts[1].trim().trim_end_matches(" kB");
+            match key {
+                "Hugepagesize" => info.size_kb = Some(value_str.parse().map_err(io::Error::other)?),
+                "HugePages_Total" => info.total = Some(value_str.parse().map_err(io::Error::other)?),
+                "HugePages_Free" => info.free = Some(value_str.parse().map_err(io::Error::other)?),
+                _ => {} // Ignore other lines
+            }
+        }
+    }
+    Ok(info)
 }
