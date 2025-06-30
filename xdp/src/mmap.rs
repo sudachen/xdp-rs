@@ -19,7 +19,10 @@
 //
 
 use std::sync::atomic::AtomicU32;
-use std::{io, ptr};
+use std::{io, ptr, slice};
+
+pub const FRAME_SIZE: usize = 2048;
+pub const FRAME_COUNT: usize = 4096;
 
 pub struct OwnedMmap(pub *mut libc::c_void, pub usize);
 
@@ -72,14 +75,14 @@ impl Drop for OwnedMmap {
     }
 }
 
-pub struct RingMmap<T> {
+pub struct RingMmap {
     pub mmap: OwnedMmap,
     pub producer: *mut AtomicU32,
     pub consumer: *mut AtomicU32,
-    pub desc: *mut T,
+    pub desc: *mut XdpDesc,
     pub flags: *mut AtomicU32,
 }
-impl<T> Default for RingMmap<T> {
+impl Default for RingMmap {
     fn default() -> Self {
         RingMmap {
             mmap: OwnedMmap(ptr::null_mut(), 0),
@@ -92,50 +95,108 @@ impl<T> Default for RingMmap<T> {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct XdpDesc {
     pub addr: u64,
     pub len: u32,
     pub options: u32,
 }
 
-#[derive(Default)]
-pub struct Ring<T> {
-    pub mmap: RingMmap<T>,
-    pub size: usize,
+impl XdpDesc {
+    pub fn new(addr: u64, len: u32, options: u32) -> Self {
+        XdpDesc { addr, len, options }
+    }
 }
 
-impl<T> Ring<T> {
+#[derive(Default)]
+pub struct Ring {
+    pub mmap: RingMmap,
+    pub len: usize,
+}
+
+impl Ring {
     pub fn mmap(
         fd: i32,
-        size: usize,
+        len: usize,
         ring_type: u64,
         offsets: &libc::xdp_ring_offset,
     ) -> Result<Self, io::Error> {
-        Ok(Ring::<T> {
-            mmap: mmap_ring(fd, size * size_of::<T>(), offsets, ring_type)?,
-            size,
+        debug_assert!(len.is_power_of_two());
+        Ok(Ring{
+            mmap: mmap_ring(fd, len * size_of::<XdpDesc>(), offsets, ring_type)?,
+            len
         })
     }
-}
-
-impl Ring<u64> {
-    pub fn fill(&self, start_frame: u64) {
+    pub fn consumer(&self) -> u32 {
+        unsafe { (*self.mmap.consumer).load(std::sync::atomic::Ordering::Acquire) }
+    }
+    pub fn producer(&self) -> u32 {
+        unsafe { (*self.mmap.consumer).load(std::sync::atomic::Ordering::Acquire) }
+    }
+    pub fn update_producer(&mut self, value: u32) {
         unsafe {
-            for i in 0..self.size {
-                let desc = self.mmap.desc.add(i);
-                *desc = start_frame + i as u64;
+            (*self.mmap.producer).store(value, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+    pub fn update_consumer(&mut self, value: u32) {
+        unsafe {
+            (*self.mmap.consumer).store(value, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+    pub fn increment(&self, value: &mut u32) -> u32 {
+        *value = (*value + 1) & (FRAME_COUNT -1) as u32;
+        *value
+    }
+
+    pub fn mut_desc_at(&mut self, index: u32) -> &mut XdpDesc {
+        debug_assert!((index as usize) < self.len);
+        unsafe { &mut *self.mmap.desc.add(index as usize) }
+    }
+
+    pub fn desc_at(&self, index: u32) -> XdpDesc {
+        debug_assert!((index as usize) < self.len);
+        unsafe { *self.mmap.desc.add(index as usize) }
+    }
+
+    pub fn fill(&mut self, start_frame: u32) {
+        debug_assert!((start_frame as usize) < self.len);
+        for i in 0 ..self.len as u32 {
+            let desc = self.mut_desc_at(i + start_frame);
+            *desc = XdpDesc {
+                addr: i as u64 * FRAME_SIZE as u64,
+                len: 0,
+                options: 0
             }
         }
     }
+    pub fn mut_bytes_at(&mut self, umem: &mut OwnedMmap, index: u32, len: usize) -> &mut [u8] {
+        debug_assert!(index < FRAME_COUNT as u32);
+        debug_assert!((len as u32) < FRAME_SIZE as u32);
+        let desc = self.mut_desc_at(index);
+        debug_assert!(umem.1 > desc.addr as usize + len);
+        unsafe {
+            let ptr = umem.as_u8_ptr().offset(desc.addr as isize);
+            desc.len = len as u32;
+            slice::from_raw_parts_mut(ptr, len)
+        }
+    }
+
+    pub fn set(&mut self, index: u32, len: u32) {
+        let desc = self.mut_desc_at(index);
+        *desc = XdpDesc {
+            addr: (index as u64 * FRAME_SIZE as u64),
+            len,
+            options: 0,
+        };
+    }
 }
 
-pub fn mmap_ring<T>(
+pub fn mmap_ring(
     fd: i32,
     size: usize,
     offsets: &libc::xdp_ring_offset,
     ring_type: u64,
-) -> Result<RingMmap<T>, io::Error> {
+) -> Result<RingMmap, io::Error> {
     let map_size = (offsets.desc as usize).saturating_add(size);
     let map_addr = unsafe {
         libc::mmap(
@@ -152,7 +213,7 @@ pub fn mmap_ring<T>(
     }
     let producer = unsafe { map_addr.add(offsets.producer as usize) as *mut AtomicU32 };
     let consumer = unsafe { map_addr.add(offsets.consumer as usize) as *mut AtomicU32 };
-    let desc = unsafe { map_addr.add(offsets.desc as usize) as *mut T };
+    let desc = unsafe { map_addr.add(offsets.desc as usize) as *mut XdpDesc };
     let flags = unsafe { map_addr.add(offsets.flags as usize) as *mut AtomicU32 };
     Ok(RingMmap {
         mmap: OwnedMmap(map_addr, map_size),

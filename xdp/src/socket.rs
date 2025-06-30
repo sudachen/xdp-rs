@@ -20,7 +20,7 @@
 //   - Internal helpers for ring setup, UMEM mapping, and device feature checks.
 //
 
-use crate::mmap::{OwnedMmap, Ring, XdpDesc};
+use crate::mmap::{OwnedMmap, Ring, FRAME_SIZE, FRAME_COUNT};
 use std::cmp::PartialEq;
 use std::io;
 use std::os::fd::{FromRawFd as _, OwnedFd};
@@ -46,12 +46,10 @@ impl AfXdpSocket {
         direction: Direction,
         config: Option<AfXdpConfig>,
     ) -> Result<Self, io::Error> {
-        let frame_count = 4096usize; // Total frames for UMEM
-        let frame_size = 2048usize; // Default frame size
         let (rx_ring_size, tx_ring_size) = match direction {
-            Direction::Tx => (0, frame_count), // all frames for outgoing packets
-            Direction::Rx => (frame_count, 0), // all frames for incoming packets
-            Direction::Both => (frame_count / 2, frame_count / 2), // split frames for both directions
+            Direction::Tx => (0, FRAME_COUNT), // all frames for outgoing packets
+            Direction::Rx => (FRAME_COUNT, 0), // all frames for incoming packets
+            Direction::Both => (FRAME_COUNT / 2, FRAME_COUNT / 2), // split frames for both directions
         };
         let huge_page = config.and_then(|cfg| cfg.no_huge_page).unwrap_or(true);
         let page_size = if !huge_page {
@@ -59,7 +57,7 @@ impl AfXdpSocket {
         } else {
             2 * 1024 * 1024 // 2MB huge page size
         };
-        let aligned_size = (frame_count * frame_size + page_size - 1) & !(page_size - 1);
+        let aligned_size = (FRAME_COUNT * FRAME_SIZE + page_size - 1) & !(page_size - 1);
         let bpf_features = unsafe {
             let mut opts: libbpf_sys::bpf_xdp_query_opts = std::mem::zeroed();
             if libbpf_sys::bpf_xdp_query(
@@ -97,7 +95,7 @@ impl AfXdpSocket {
             libc::xdp_umem_reg {
                 addr: umem.as_void_ptr() as u64,
                 len: umem.len() as u64,
-                chunk_size: frame_size as u32,
+                chunk_size: FRAME_SIZE as u32,
                 ..std::mem::zeroed()
             }
         };
@@ -153,43 +151,41 @@ impl AfXdpSocket {
         let (completion_ring, tx_ring) = if direction == Direction::Rx {
             (Ring::default(), Ring::default())
         } else {
-            let ring = Ring::mmap(
+            let c_ring = Ring::mmap(
                 raw_fd,
                 tx_ring_size,
                 libc::XDP_UMEM_PGOFF_COMPLETION_RING,
                 &offsets.cr,
             )?;
-            ring.fill(0);
-            (
-                ring,
-                Ring::mmap(
-                    raw_fd,
-                    tx_ring_size,
-                    libc::XDP_PGOFF_TX_RING as u64,
-                    &offsets.tx,
-                )?,
-            )
+            let mut tx_ring = Ring::mmap(
+                raw_fd,
+                tx_ring_size,
+                libc::XDP_PGOFF_TX_RING as u64,
+                &offsets.tx,
+            )?;
+            // setting up all descriptors to with right addresses and lengths
+            tx_ring.fill(0);
+            (c_ring, tx_ring)
         };
 
         let (fill_ring, rx_ring) = if direction == Direction::Tx {
             (Ring::default(), Ring::default())
         } else {
-            let ring = Ring::mmap(
+            let mut f_ring = Ring::mmap(
                 raw_fd,
                 rx_ring_size,
                 libc::XDP_UMEM_PGOFF_FILL_RING,
                 &offsets.fr,
             )?;
-            ring.fill(tx_ring_size as u64);
-            (
-                ring,
-                Ring::mmap(
-                    raw_fd,
-                    rx_ring_size,
-                    libc::XDP_PGOFF_RX_RING as u64,
-                    &offsets.rx,
-                )?,
-            )
+            // setting up all descriptors to with right addresses and lengths
+            f_ring.fill(tx_ring_size as u32);
+            let rx_ring = Ring::mmap(
+                raw_fd,
+                rx_ring_size,
+                libc::XDP_PGOFF_RX_RING as u64,
+                &offsets.rx,
+            )?;
+            (f_ring, rx_ring)
         };
 
         let zero_copy = match bpf_features & 8/*NETDEV_XDP_ACT_XSK_ZEROCOPY*/ != 0 {
@@ -220,13 +216,14 @@ impl AfXdpSocket {
             umem,
             direction,
             tx_ring,
-            completion_ring,
+            c_ring: completion_ring,
             rx_ring,
-            fill_ring,
+            f_ring: fill_ring,
+            rx_head: 0,
+            tx_tail: tx_ring_size.saturating_sub(1) as u32,
         })
     }
 }
-
 pub struct QueueId(pub u8);
 pub struct DeviceQueue {
     pub if_index: u32,
@@ -244,10 +241,12 @@ pub struct AfXdpSocket {
     pub fd: OwnedFd,
     pub umem: OwnedMmap,
     pub direction: Direction,
-    pub tx_ring: Ring<XdpDesc>,
-    pub completion_ring: Ring<u64>,
-    pub rx_ring: Ring<XdpDesc>,
-    pub fill_ring: Ring<u64>,
+    pub tx_ring: Ring,
+    pub c_ring: Ring,
+    pub rx_ring: Ring,
+    pub f_ring: Ring,
+    pub rx_head: u32,
+    pub tx_tail: u32,
 }
 
 #[derive(Debug, Copy, Clone, Default)]
