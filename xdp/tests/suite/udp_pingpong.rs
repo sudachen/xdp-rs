@@ -36,7 +36,7 @@ pub fn run_pinger(local_addr: &str, remote_addr: &str) -> io::Result<()> {
     Ok(())
 }
 
-pub fn run_ponger(local_addr: &str, token: CancellationToken) -> io::Result<()> {
+pub fn run_ponger(local_addr: &str, _token: CancellationToken) -> io::Result<()> {
     let socket = UdpSocket::bind(local_addr)?;
     log::debug!("[UDP_Ponger] Listening on {}...", local_addr);
     //socket.set_read_timeout(Some(Duration::from_millis(300)))?;

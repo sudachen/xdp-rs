@@ -53,6 +53,6 @@ where
     }
     let host_pair = HostPair::from_prefixes(DEV_PREFIX, IP_PREFIX);
     test(host_pair).await?;
-    //veth::teardown_pair(DEV_PREFIX)?;
+    veth::teardown_pair(DEV_PREFIX)?;
     Ok(())
 }

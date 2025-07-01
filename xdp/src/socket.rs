@@ -51,26 +51,6 @@ impl AfXdpSocket {
             Direction::Rx => (FRAME_COUNT, 0), // all frames for incoming packets
             Direction::Both => (FRAME_COUNT / 2, FRAME_COUNT / 2), // split frames for both directions
         };
-        let bpf_features = unsafe {
-            let mut opts: libbpf_sys::bpf_xdp_query_opts = std::mem::zeroed();
-            opts.sz = size_of::<libbpf_sys::bpf_xdp_query_opts>() as u64;
-            if libbpf_sys::bpf_xdp_query(
-                device_queue.if_index as libc::c_int,
-                libbpf_sys::XDP_FLAGS_DRV_MODE as libc::c_int,
-                &mut opts,
-            ) < 0
-            {
-                return Err(io::Error::last_os_error());
-            }
-            opts.feature_flags as u32
-        };
-
-        if direction != Direction::Tx && (bpf_features & 2/*NETDEV_XDP_ACT_REDIRECT*/ == 0) {
-            return Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "Device does not support XDP redirection",
-            ));
-        }
 
         let (fd, raw_fd) = unsafe {
             let fd = libc::socket(libc::AF_XDP, libc::SOCK_RAW | libc::SOCK_CLOEXEC, 0);
@@ -80,116 +60,41 @@ impl AfXdpSocket {
             (OwnedFd::from_raw_fd(fd), fd)
         };
 
-        let umem = OwnedMmap::mmap(FRAME_COUNT * FRAME_SIZE, config.and_then(|cfg| cfg.no_huge_page)).map_err(|e| {
-            log::error!("Failed to allocate UMEM: {}", e);
-            e
-        })?;
+        let umem = setup_umem(raw_fd, config.as_ref())?;
 
-        let reg = unsafe {
-            libc::xdp_umem_reg {
-                addr: umem.as_void_ptr() as u64,
-                len: umem.len() as u64,
-                chunk_size: FRAME_SIZE as u32,
-                ..std::mem::zeroed()
-            }
-        };
-
-        unsafe {
-            if libc::setsockopt(
-                raw_fd,
-                libc::SOL_XDP,
-                libc::XDP_UMEM_REG,
-                &reg as *const _ as *const libc::c_void,
-                size_of::<libc::xdp_umem_reg>() as libc::socklen_t,
-            ) < 0
-            {
-                return Err(io::Error::last_os_error());
-            }
-        }
-
-        let set_ring_size = |ring, ring_size: usize| unsafe {
-            if libc::setsockopt(
-                raw_fd,
-                libc::SOL_XDP,
-                ring,
-                &ring_size as *const _ as *const libc::c_void,
-                size_of::<u32>() as libc::socklen_t,
-            ) < 0
-            {
-                return Err(io::Error::last_os_error());
-            }
-            Ok(())
-        };
-
-        set_ring_size(libc::XDP_UMEM_COMPLETION_RING, if tx_ring_size > 0 {tx_ring_size} else {1})?;
-        set_ring_size(libc::XDP_TX_RING, if tx_ring_size > 0 {tx_ring_size} else {1})?;
-        set_ring_size(libc::XDP_UMEM_FILL_RING, if rx_ring_size > 0 {rx_ring_size} else {1} )?;
-        set_ring_size(libc::XDP_RX_RING, if rx_ring_size > 0 {rx_ring_size} else {1})?;
-
-        let mut offsets: libc::xdp_mmap_offsets = unsafe { std::mem::zeroed() };
-        let mut optlen = size_of::<libc::xdp_mmap_offsets>() as libc::socklen_t;
-
-        unsafe {
-            if libc::getsockopt(
-                raw_fd,
-                libc::SOL_XDP,
-                libc::XDP_MMAP_OFFSETS,
-                &mut offsets as *mut _ as *mut libc::c_void,
-                &mut optlen,
-            ) < 0
-            {
-                return Err(io::Error::last_os_error());
-            }
-        }
-
-        let (c_ring, tx_ring) = if direction == Direction::Rx {
+        if tx_ring_size > 0 { RingType::Tx.set_size(raw_fd, tx_ring_size)?; }
+        if rx_ring_size > 0 { RingType::Rx.set_size(raw_fd, rx_ring_size)?; }
+        RingType::Fill.set_size(raw_fd, tx_ring_size)?;
+        RingType::Completion.set_size(raw_fd, tx_ring_size)?;
+        let offsets = ring_offsets(raw_fd)?;
+        let (mut tx_ring, c_ring) = if direction == Direction::Rx {
             (Ring::default(), Ring::default())
         } else {
-            let mut tx_ring = Ring::mmap(
-                raw_fd,
-                tx_ring_size,
-                libc::XDP_PGOFF_TX_RING as u64,
-                &offsets.tx,
-            )?;
-            let c_ring = Ring::mmap(
-                raw_fd,
-                tx_ring_size,
-                libc::XDP_UMEM_PGOFF_COMPLETION_RING,
-                &offsets.cr,
-            )?;
-            // setting up all descriptors to with right addresses and lengths
-            tx_ring.fill(0);
-            (c_ring, tx_ring)
+            (RingType::Tx.mmap(raw_fd, &offsets, tx_ring_size)?,
+             RingType::Completion.mmap(raw_fd, &offsets, tx_ring_size)?)
         };
-
-        let (f_ring, rx_ring) = if direction == Direction::Tx {
+        let (rx_ring, f_ring) = if direction == Direction::Tx {
             (Ring::default(), Ring::default())
         } else {
-            let f_ring = Ring::mmap(
-                raw_fd,
-                rx_ring_size,
-                libc::XDP_UMEM_PGOFF_FILL_RING,
-                &offsets.fr,
-            )?;
-            // setting up all descriptors to with right addresses and lengths
-            //f_ring.fill(tx_ring_size as u32);
-            let rx_ring = Ring::mmap(
-                raw_fd,
-                rx_ring_size,
-                libc::XDP_PGOFF_RX_RING as u64,
-                &offsets.rx,
-            )?;
-            (f_ring, rx_ring)
+            (RingType::Rx.mmap(raw_fd, &offsets, rx_ring_size)?,
+             RingType::Fill.mmap(raw_fd, &offsets, rx_ring_size)?)
         };
 
-        let zero_copy = match bpf_features & 8/*NETDEV_XDP_ACT_XSK_ZEROCOPY*/ != 0 {
-            true if !config.and_then(|cfg| cfg.no_zero_copy).unwrap_or(false) => libc::XDP_ZEROCOPY,
-            _ => libc::XDP_COPY,
+        let zero_copy = match config.and_then(|cfg| cfg.zero_copy) {
+            Some(true) => libc::XDP_ZEROCOPY,
+            Some(false) => libc::XDP_COPY,
+            None => 0
+        };
+
+        let need_wakeup = if config.and_then(|cfg| cfg.need_wakeup).unwrap_or(true) {
+            libc::XDP_USE_NEED_WAKEUP
+        } else {
+            0
         };
 
         let sxdp = libc::sockaddr_xdp {
             sxdp_family: libc::AF_XDP as libc::sa_family_t,
-            sxdp_flags: libc::XDP_USE_NEED_WAKEUP | zero_copy,
+            sxdp_flags: need_wakeup | zero_copy,
             sxdp_ifindex: device_queue.if_index,
             sxdp_queue_id: device_queue.queue_id.0 as u32,
             sxdp_shared_umem_fd: 0,
@@ -202,8 +107,10 @@ impl AfXdpSocket {
                 size_of::<libc::sockaddr_xdp>() as libc::socklen_t,
             ) < 0
         } {
-            return Err(io::Error::last_os_error());
+            return Err(io::Error::other(format!("Failed to bind: {}",io::Error::last_os_error())));
         }
+
+        tx_ring.fill(0);
 
         Ok(Self {
             fd,
@@ -218,6 +125,135 @@ impl AfXdpSocket {
         })
     }
 }
+
+//const NETDEV_XDP_ACT_REDIRECT: u32 = 2;
+pub fn xdp_features(if_index: u32) -> io::Result<u32> {
+    Ok(unsafe {
+        let mut opts: libbpf_sys::bpf_xdp_query_opts = std::mem::zeroed();
+        opts.sz = size_of::<libbpf_sys::bpf_xdp_query_opts>() as u64;
+        if libbpf_sys::bpf_xdp_query(
+            if_index as libc::c_int,
+            libbpf_sys::XDP_FLAGS_DRV_MODE as libc::c_int,
+            &mut opts,
+        ) < 0
+        {
+            return Err(io::Error::other(format!("Failed to query XDP features: {}", io::Error::last_os_error())));
+        }
+        opts.feature_flags as u32
+    })
+}
+
+#[derive(Copy,Clone,Debug,PartialEq)]
+enum RingType {
+    Tx,
+    Rx,
+    Fill,
+    Completion,
+}
+
+impl RingType {
+    fn as_index(&self) -> libc::c_int {
+        match self {
+            RingType::Tx => libc::XDP_TX_RING,
+            RingType::Rx => libc::XDP_RX_RING,
+            RingType::Fill => libc::XDP_UMEM_FILL_RING,
+            RingType::Completion => libc::XDP_UMEM_COMPLETION_RING,
+        }
+    }
+
+    fn as_offset(&self) -> u64 {
+        match self {
+            RingType::Tx => libc::XDP_PGOFF_TX_RING as u64,
+            RingType::Rx => libc::XDP_PGOFF_RX_RING as u64,
+            RingType::Fill => libc::XDP_UMEM_PGOFF_FILL_RING,
+            RingType::Completion => libc::XDP_UMEM_PGOFF_COMPLETION_RING,
+        }
+    }
+
+    pub fn set_size(self, raw_fd: libc::c_int, mut ring_size: usize) -> io::Result<()> {
+        if ring_size == 0 {
+            if self == RingType::Fill || self == RingType::Completion {
+                ring_size = 1 // Fill and Completion rings must have at least one entry
+            }
+        }
+        unsafe {
+            if libc::setsockopt(
+                raw_fd,
+                libc::SOL_XDP,
+                self.as_index() as libc::c_int,
+                &ring_size as *const _ as *const libc::c_void,
+                size_of::<u32>() as libc::socklen_t,
+            ) < 0
+            {
+                return Err(io::Error::last_os_error());
+            }
+        }
+        Ok(())
+    }
+    pub fn mmap<T: Copy>(self, raw_fd: libc::c_int, offsets: &libc::xdp_mmap_offsets, ring_size: usize) -> io::Result<Ring<T>> {
+        let ring_offs = match self {
+            RingType::Tx => &offsets.tx,
+            RingType::Rx => &offsets.rx,
+            RingType::Fill => &offsets.fr,
+            _ => &offsets.cr,
+        };
+        Ring::<T>::mmap(
+            raw_fd,
+            ring_size,
+            self.as_offset(),
+            ring_offs
+        )
+    }
+}
+
+pub fn ring_offsets(raw_fd: libc::c_int) -> io::Result<libc::xdp_mmap_offsets> {
+    let mut offsets: libc::xdp_mmap_offsets = unsafe { std::mem::zeroed() };
+    let mut optlen = size_of::<libc::xdp_mmap_offsets>() as libc::socklen_t;
+    unsafe {
+        if libc::getsockopt(
+            raw_fd,
+            libc::SOL_XDP,
+            libc::XDP_MMAP_OFFSETS,
+            &mut offsets as *mut _ as *mut libc::c_void,
+            &mut optlen,
+        ) < 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+    }
+    Ok(offsets)
+}
+
+pub fn setup_umem(raw_fd: libc::c_int, config: Option<&AfXdpConfig>) -> io::Result<OwnedMmap> {
+    let umem = OwnedMmap::mmap(FRAME_COUNT * FRAME_SIZE, config.and_then(|cfg| cfg.huge_page)).map_err(|e| {
+        io::Error::other(format!("Failed to allocate UMEM: {}", e))
+    })?;
+
+    let reg = unsafe {
+        libc::xdp_umem_reg {
+            addr: umem.as_void_ptr() as u64,
+            len: umem.len() as u64,
+            chunk_size: FRAME_SIZE as u32,
+            ..std::mem::zeroed()
+        }
+    };
+
+    unsafe {
+        if libc::setsockopt(
+            raw_fd,
+            libc::SOL_XDP,
+            libc::XDP_UMEM_REG,
+            &reg as *const _ as *const libc::c_void,
+            size_of::<libc::xdp_umem_reg>() as libc::socklen_t,
+        ) < 0
+        {
+            return Err(io::Error::other(format!("Failed to register UMEM: {}",io::Error::last_os_error())));
+        }
+    }
+
+    Ok(umem)
+}
+
 pub struct QueueId(pub u8);
 pub struct DeviceQueue {
     pub if_index: u32,
@@ -261,7 +297,12 @@ pub struct AfXdpSocket {
 
 #[derive(Debug, Copy, Clone, Default)]
 pub struct AfXdpConfig {
-    pub no_zero_copy: Option<bool>,
-    pub no_huge_page: Option<bool>,
+    // if None Kernel is used XDP_ZEROCOPY if this ability is available
+    // you can set if to enforce behaviour
+    pub zero_copy: Option<bool>,
+    // if None and HugePages are available, they will be used
+    pub huge_page: Option<bool>,
+    // if None or true then XDP_USE_NEED_WAKEUP is used in socket binding
+    pub need_wakeup: Option<bool>
 }
 
