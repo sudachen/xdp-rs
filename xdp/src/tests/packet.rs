@@ -1,9 +1,9 @@
 #![cfg(test)]
 
+use crate::write_udp_header_for;
+use etherparse::{SlicedPacket, TransportSlice};
 use std::io::Write;
 use std::net::Ipv4Addr;
-use etherparse::{SlicedPacket, TransportSlice};
-use crate::write_udp_header_for;
 
 #[test]
 fn test_write_udp_header() {
@@ -14,17 +14,18 @@ fn test_write_udp_header() {
     let src_port = 12345;
     let dst_port = 54321;
     let data = b"Hello, XDP!";
-    let hdr = write_udp_header_for(data, src_addr, src_mac, src_port, dst_addr, dst_mac, dst_port).unwrap();
+    let hdr = write_udp_header_for(
+        data, src_addr, src_mac, src_port, dst_addr, dst_mac, dst_port,
+    )
+    .unwrap();
     assert_eq!(hdr.len(), 42);
-    let mut buf = [0u8; 42+11];
+    let mut buf = [0u8; 42 + 11];
     buf[..42].clone_from_slice(&hdr);
     buf[42..].copy_from_slice(data);
     match SlicedPacket::from_ethernet(&buf) {
-        Ok(packet) => {
-            match packet.transport {
-                Some(TransportSlice::Udp(_udp)) => {},
-                _ => panic!("Not udp packet"),
-            }
+        Ok(packet) => match packet.transport {
+            Some(TransportSlice::Udp(_udp)) => {}
+            _ => panic!("Not udp packet"),
         },
         Err(e) => panic!("Failed to parse packet: {}", e),
     };

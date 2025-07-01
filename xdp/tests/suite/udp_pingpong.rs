@@ -1,6 +1,6 @@
+use std::io;
 use std::net::UdpSocket;
 use std::time::Duration;
-use std::io;
 use tokio_util::sync::CancellationToken;
 
 pub fn run_pinger(local_addr: &str, remote_addr: &str) -> io::Result<()> {
@@ -21,7 +21,10 @@ pub fn run_pinger(local_addr: &str, remote_addr: &str) -> io::Result<()> {
                 log::debug!("[UDP_Pinger] Success! Received 'PONG' from {}", remote_addr);
             } else {
                 let received_str = String::from_utf8_lossy(message);
-                log::error!("[UDP_Pinger] Received unexpected message: '{}'", received_str);
+                log::error!(
+                    "[UDP_Pinger] Received unexpected message: '{}'",
+                    received_str
+                );
             }
         }
         Err(e) if e.kind() == io::ErrorKind::WouldBlock || e.kind() == io::ErrorKind::TimedOut => {
@@ -47,15 +50,23 @@ pub fn run_ponger(local_addr: &str, _token: CancellationToken) -> io::Result<()>
             Ok((number_of_bytes, src_addr)) => {
                 let message = &buffer[..number_of_bytes];
                 if message == b"PING" {
-                    log::debug!("[UDP_Ponger] Received 'PING' from {}. Responding...", src_addr);
+                    log::debug!(
+                        "[UDP_Ponger] Received 'PING' from {}. Responding...",
+                        src_addr
+                    );
                     socket.send_to(b"PONG", src_addr)?;
                 } else {
                     let received_str = String::from_utf8_lossy(message);
-                    log::debug!("[UDP_Ponger] Received unexpected: '{}'. Ignoring.", received_str);
+                    log::debug!(
+                        "[UDP_Ponger] Received unexpected: '{}'. Ignoring.",
+                        received_str
+                    );
                 }
                 break;
             }
-            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock || e.kind() == io::ErrorKind::TimedOut => {
+            Err(ref e)
+                if e.kind() == io::ErrorKind::WouldBlock || e.kind() == io::ErrorKind::TimedOut =>
+            {
                 log::warn!("[UDP_Ponger] No data received, waiting for 'PING'... {e}");
                 //if token.is_cancelled() { break }
                 continue;

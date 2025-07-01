@@ -14,8 +14,8 @@
 
 use std::env;
 use std::error::Error;
-use tokio::net::UdpSocket;
 use std::str;
+use tokio::net::UdpSocket;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {

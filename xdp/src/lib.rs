@@ -5,6 +5,7 @@ pub mod router;
 pub mod send;
 pub mod socket;
 
+mod ring;
 mod tests;
 
 pub use netlink::{find_default_gateway, get_ipv4_address, get_links, netlink};

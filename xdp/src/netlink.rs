@@ -30,16 +30,16 @@ use netlink_packet_core::{
 };
 use netlink_packet_route::{
     AddressFamily, RouteNetlinkMessage,
+    address::{AddressAttribute, AddressMessage},
+    link::{LinkAttribute, LinkMessage},
     neighbour::{NeighbourAddress, NeighbourAttribute, NeighbourMessage},
     route::{RouteAddress, RouteAttribute, RouteMessage},
-    address::{AddressMessage, AddressAttribute},
-    link::{LinkMessage,LinkAttribute},
 };
 use netlink_sys::{Socket, SocketAddr};
 use std::io;
 use std::net::{IpAddr, Ipv4Addr};
 
-#[derive(Clone,Debug,Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Link {
     pub if_index: u32,
     pub name: String,
@@ -185,7 +185,7 @@ pub fn get_ipv4_routes(if_index: Option<u32>) -> Result<Vec<Ipv4Route>, io::Erro
     })
 }
 
-pub fn get_ipv4_address(if_index: Option<u32>) -> Result<Vec<(Ipv4Addr,u32)>, io::Error> {
+pub fn get_ipv4_address(if_index: Option<u32>) -> Result<Vec<(Ipv4Addr, u32)>, io::Error> {
     let mut req_msg = AddressMessage::default();
     req_msg.header.family = AddressFamily::Inet;
     let req = NetlinkMessage::from(RouteNetlinkMessage::GetAddress(req_msg));
@@ -197,7 +197,7 @@ pub fn get_ipv4_address(if_index: Option<u32>) -> Result<Vec<(Ipv4Addr,u32)>, io
                 }
                 for attr in addr_msg.attributes.iter() {
                     if let AddressAttribute::Address(IpAddr::V4(ip)) = attr {
-                        return Ok(Some((*ip,addr_msg.header.index)));
+                        return Ok(Some((*ip, addr_msg.header.index)));
                     }
                 }
                 Ok(None)
@@ -210,35 +210,35 @@ pub fn get_ipv4_address(if_index: Option<u32>) -> Result<Vec<(Ipv4Addr,u32)>, io
 pub fn get_links() -> Result<Vec<Link>, io::Error> {
     let req_msg = LinkMessage::default();
     let req = NetlinkMessage::from(RouteNetlinkMessage::GetLink(req_msg));
-    netlink(req, |msg| {
-        match msg.payload {
-            NetlinkPayload::InnerMessage(RouteNetlinkMessage::NewLink(ref link_msg)) => {
-                let mut link = Link {
-                    if_index: link_msg.header.index,
-                    .. Default::default()
-                };
-                for attr in link_msg.attributes.iter() {
-                    match attr {
-                        LinkAttribute::IfName(name) => {
-                            link.name = name.to_string();
-                        }
-                        LinkAttribute::Mtu(mtu) => {
-                            link.mtu = *mtu;
-                        }
-                        LinkAttribute::Address(mac) => {
-                            if mac.len() == 6 {
-                                link.mac = mac[0..6].try_into().map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
-                            } else {
-                                return Ok(None);
-                            }
-                        }
-                        _ => {}
+    netlink(req, |msg| match msg.payload {
+        NetlinkPayload::InnerMessage(RouteNetlinkMessage::NewLink(ref link_msg)) => {
+            let mut link = Link {
+                if_index: link_msg.header.index,
+                ..Default::default()
+            };
+            for attr in link_msg.attributes.iter() {
+                match attr {
+                    LinkAttribute::IfName(name) => {
+                        link.name = name.to_string();
                     }
+                    LinkAttribute::Mtu(mtu) => {
+                        link.mtu = *mtu;
+                    }
+                    LinkAttribute::Address(mac) => {
+                        if mac.len() == 6 {
+                            link.mac = mac[0..6]
+                                .try_into()
+                                .map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
+                        } else {
+                            return Ok(None);
+                        }
+                    }
+                    _ => {}
                 }
-                Ok(Some(link))
             }
-            _ => Ok(None),
+            Ok(Some(link))
         }
+        _ => Ok(None),
     })
 }
 

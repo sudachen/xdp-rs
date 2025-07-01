@@ -15,11 +15,11 @@
 //   - TransmitError: Enum for error conditions during transmission.
 //
 
+use crate::ring::XdpDesc;
 use crate::socket::{AfXdpSocket, Direction};
 use std::os::fd::AsRawFd as _;
 use std::sync::atomic::Ordering;
 use std::{io, ptr};
-use crate::mmap::XdpDesc;
 
 pub struct Transmitter<'a>(&'a mut AfXdpSocket);
 
@@ -76,7 +76,11 @@ impl Transmitter<'_> {
             while c_tail != c_head {
                 // get completed chunk descriptor from completion ring
                 c_ring.increment(&mut c_head);
-                let mut desc = XdpDesc { addr: c_ring.desc_at(c_head), len: 0, options: 0 };
+                let mut desc = XdpDesc {
+                    addr: c_ring.desc_at(c_head),
+                    len: 0,
+                    options: 0,
+                };
                 c_ring.update_consumer(c_head);
                 // put it back to the tx_ring
                 desc.len = 0;
@@ -91,13 +95,17 @@ impl Transmitter<'_> {
         if let Some(bs) = header {
             buf[0..hdr_len].copy_from_slice(bs);
         }
-        buf[hdr_len ..].copy_from_slice(data);
+        buf[hdr_len..].copy_from_slice(data);
         tx_ring.increment(&mut tx_head);
         tx_ring.update_producer(tx_head);
         Ok(())
     }
-    pub fn send_and_wakeup(&mut self, data: &[u8], header: Option<&[u8]>) -> Result<(), TransmitError> {
-        self.send(data,header)?;
+    pub fn send_and_wakeup(
+        &mut self,
+        data: &[u8],
+        header: Option<&[u8]>,
+    ) -> Result<(), TransmitError> {
+        self.send(data, header)?;
         self.tx_wakeup().map_err(TransmitError::Io)
     }
 
@@ -107,7 +115,9 @@ impl Transmitter<'_> {
             let c_ring = &mut self.0.c_ring;
             let c_head = c_ring.consumer();
             let c_tail = c_ring.producer();
-            if c_tail != c_head { break } // no completed chunks, exit loop
+            if c_tail != c_head {
+                break;
+            } // no completed chunks, exit loop
         }
         Ok(())
     }
@@ -117,7 +127,9 @@ impl Transmitter<'_> {
             let tx_ring = &mut self.0.tx_ring;
             let tx_head = tx_ring.consumer();
             let tx_tail = tx_ring.producer();
-            if tx_tail == tx_head { break } // no completed chunks, exit loop
+            if tx_tail == tx_head {
+                break;
+            } // no completed chunks, exit loop
         }
         Ok(())
     }
@@ -158,4 +170,3 @@ pub enum TransmitError {
     RingFull,
     Io(io::Error),
 }
-

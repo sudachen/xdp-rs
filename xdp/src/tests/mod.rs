@@ -1,2 +1,2 @@
-mod packet;
 mod netlink;
+mod packet;

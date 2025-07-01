@@ -1,6 +1,6 @@
 use crate::suite::veth;
-use std::io::{Result, ErrorKind};
 use std::future::Future;
+use std::io::{ErrorKind, Result};
 
 pub const DEV_PREFIX: &str = "xdpVeth";
 pub const IP_PREFIX: &str = "192.168.77.";
@@ -12,10 +12,7 @@ pub struct Host {
 
 impl Host {
     pub fn new(if_dev: String, ip: String) -> Self {
-        Host {
-            if_dev,
-            ip,
-        }
+        Host { if_dev, ip }
     }
 }
 
@@ -26,12 +23,9 @@ pub struct HostPair {
 
 impl HostPair {
     pub fn new(host0: Host, host1: Host) -> Self {
-        HostPair {
-            host0,
-            host1,
-        }
+        HostPair { host0, host1 }
     }
-    
+
     pub fn from_prefixes(dev_prefix: &str, ip_prefix: &str) -> Self {
         let host0 = Host::new(format!("{}0", dev_prefix), format!("{}100", ip_prefix));
         let host1 = Host::new(format!("{}1", dev_prefix), format!("{}101", ip_prefix));
@@ -39,14 +33,14 @@ impl HostPair {
     }
 }
 
-pub async fn run_test_with_pair<F,Fut>(test: F) -> Result<()>
-where 
+pub async fn run_test_with_pair<F, Fut>(test: F) -> Result<()>
+where
     F: FnOnce(HostPair) -> Fut,
     Fut: Future<Output = Result<()>>,
 {
     if let Err(e) = veth::check_pair(DEV_PREFIX) {
         if e.kind() == ErrorKind::NotFound {
-            veth::setup_pair(DEV_PREFIX,IP_PREFIX)?;
+            veth::setup_pair(DEV_PREFIX, IP_PREFIX)?;
         } else {
             return Err(e);
         }

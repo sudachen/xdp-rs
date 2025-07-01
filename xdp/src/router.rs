@@ -20,12 +20,12 @@
 //   - Gateway: Represents a default gateway.
 //
 
+pub use crate::netlink::{Ipv4Route, Neighbor, get_ipv4_routes, get_neighbors};
 use ipnet::Ipv4Net;
 use prefix_trie::PrefixMap;
 use std::collections::HashMap;
 use std::io;
 use std::net::Ipv4Addr;
-pub use crate::netlink::{get_ipv4_routes, get_neighbors, Ipv4Route, Neighbor};
 
 impl Router {
     pub fn new(if_index: u32) -> Self {
@@ -76,7 +76,7 @@ pub struct Router {
     pub routes: PrefixMap<Ipv4Net, Ipv4Route>,
 }
 
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct NextHop {
     pub ip_addr: Ipv4Addr,
     pub mac_addr: Option<[u8; 6]>,

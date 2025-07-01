@@ -1,7 +1,7 @@
 use std::io::{Error, Result};
 use std::net::Ipv4Addr;
 use std::str::FromStr;
-use xdp_socket::{AfXdpSocket, DeviceQueue, Direction, Router, get_ipv4_address, Neighbor};
+use xdp_socket::{AfXdpSocket, DeviceQueue, Direction, Neighbor, Router, get_ipv4_address};
 
 pub fn xdp_pinger(src_ip: &str, src_port: u16, dst_ip: &str, dst_port: u16) -> Result<()> {
     let src_addr = Ipv4Addr::from_str(src_ip)
@@ -14,8 +14,12 @@ pub fn xdp_pinger(src_ip: &str, src_port: u16, dst_ip: &str, dst_port: u16) -> R
         .ok_or_else(|| Error::other(format!("Source IP {} not found", src_ip)))?
         .1;
 
-    let src_mac = eui48::MacAddress::from_str("fa:95:2c:e3:0e:a5").map_err(|e| Error::other(format!("invalid MAC address: {}", e)))?.to_array();
-    let dst_mac = eui48::MacAddress::from_str("aa:79:ea:34:4b:b8").map_err(|e| Error::other(format!("invalid MAC address: {}", e)))?.to_array();
+    let src_mac = eui48::MacAddress::from_str("fa:95:2c:e3:0e:a5")
+        .map_err(|e| Error::other(format!("invalid MAC address: {}", e)))?
+        .to_array();
+    let dst_mac = eui48::MacAddress::from_str("aa:79:ea:34:4b:b8")
+        .map_err(|e| Error::other(format!("invalid MAC address: {}", e)))?
+        .to_array();
 
     let mut socket = AfXdpSocket::new(DeviceQueue::form_ifindex(if_index), Direction::Tx, None)
         .map_err(|e| Error::other(format!("Failed to create XDP socket: {}", e)))?;
@@ -29,11 +33,14 @@ pub fn xdp_pinger(src_ip: &str, src_port: u16, dst_ip: &str, dst_port: u16) -> R
     log::debug!("Router Neighbors: {:?}", router.neighbors);
     log::debug!("Router Routes: {:?}", router.routes);
 
-    router.neighbors.insert(dst_addr, Neighbor {
-        ip: dst_addr,
-        mac: dst_mac,
-        if_index
-    });
+    router.neighbors.insert(
+        dst_addr,
+        Neighbor {
+            ip: dst_addr,
+            mac: dst_mac,
+            if_index,
+        },
+    );
 
     let next_hop = router
         .route(dst_addr)
@@ -48,11 +55,11 @@ pub fn xdp_pinger(src_ip: &str, src_port: u16, dst_ip: &str, dst_port: u16) -> R
         src_port,
         dst_addr,
         next_hop.mac_addr.unwrap(),
-        dst_port
+        dst_port,
     )?;
     socket
         .tx()?
-        .send_and_wakeup(data,Some(&hdr))
+        .send_and_wakeup(data, Some(&hdr))
         .map_err(|e| Error::other(format!("Failed to write header: {:?}", e)))?;
     log::debug!("Sent PING packet from {} to {}", src_ip, dst_ip);
     socket
