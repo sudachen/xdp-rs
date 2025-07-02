@@ -3,7 +3,7 @@ use std::net::Ipv4Addr;
 use std::str::FromStr;
 use xdp_socket::{AfXdpSocket, DeviceQueue, Direction, Neighbor, Router, get_ipv4_address};
 
-pub fn xdp_pinger(src_ip: &str, src_port: u16, dst_ip: &str, dst_port: u16) -> Result<()> {
+pub fn run_pinger(src_ip: &str, src_port: u16, dst_ip: &str, dst_port: u16) -> Result<()> {
     let src_addr = Ipv4Addr::from_str(src_ip)
         .map_err(|e| Error::other(format!("invalid IP address: {}", e)))?;
     let dst_addr = Ipv4Addr::from_str(dst_ip)
@@ -59,13 +59,13 @@ pub fn xdp_pinger(src_ip: &str, src_port: u16, dst_ip: &str, dst_port: u16) -> R
     )?;
     socket
         .tx()?
-        .send_and_wakeup(data, Some(&hdr))
+        .send_and_kick(data, Some(&hdr))
         .map_err(|e| Error::other(format!("Failed to write header: {:?}", e)))?;
     log::debug!("Sent PING packet from {} to {}", src_ip, dst_ip);
-    socket
-        .tx()?
-        .wait_for_completion()
-        .map_err(|e| Error::other(format!("Failed to wait for completion: {:?}", e)))?;
+    /*socket
+    .tx()?
+    .wait_for_completion()
+    .map_err(|e| Error::other(format!("Failed to wait for completion: {:?}", e)))?;*/
     log::debug!("Packet completed");
     Ok(())
 }

@@ -1,10 +1,9 @@
 [package]
 name = "xdp-socket"
 version = "0.1.0"
-edition = "2024"
 
 authors.workspace = true
-#edition.workspace = true
+edition.workspace = true
 homepage.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -31,14 +30,10 @@ caps = { workspace = true }
 [dev-dependencies]
 eui48 = { version = "0.5.1" }
 env_logger = { workspace = true }
+nettest = { path = "../nettest" }
 
 [[test]]
 name = "pingpong"
 path = "tests/pingpong.rs"
-harness = false
-
-[[test]]
-name = "pong"
-path = "tests/tool_pong.rs"
 harness = false
 

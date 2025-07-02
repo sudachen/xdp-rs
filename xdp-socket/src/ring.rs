@@ -77,7 +77,7 @@ where
         }
     }
     pub fn increment(&self, value: &mut u32) -> u32 {
-        *value = (*value + 1) & (FRAME_COUNT - 1) as u32;
+        *value = (*value + 1) & (self.len - 1) as u32;
         *value
     }
 
@@ -187,7 +187,7 @@ impl RingType {
     }
 
     pub fn set_size(self, raw_fd: libc::c_int, mut ring_size: usize) -> io::Result<()> {
-        if ring_size == 0 && ( self == RingType::Fill || self == RingType::Completion ) {
+        if ring_size == 0 && (self == RingType::Fill || self == RingType::Completion) {
             ring_size = 1 // Fill and Completion rings must have at least one entry
         }
         unsafe {

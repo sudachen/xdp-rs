@@ -23,9 +23,9 @@
 use crate::mmap::OwnedMmap;
 use crate::ring::{FRAME_COUNT, FRAME_SIZE, Ring, RingType, XdpDesc};
 use std::cmp::PartialEq;
-use std::io;
-use std::os::fd::{FromRawFd as _, OwnedFd};
-
+use std::os::fd::{AsRawFd as _, FromRawFd as _, OwnedFd};
+use std::sync::atomic::Ordering;
+use std::{io, ptr};
 /*
    This socket is optimized for sending and receiving small UDP packets in low-latency P2P networks.
    To minimize overhead, it does not support packets larger than 2048 bytes and dynamic frame allocation.
@@ -141,6 +141,37 @@ impl AfXdpSocket {
             rx_head: 0,
             tx_tail: tx_ring_size.saturating_sub(1) as u32,
         })
+    }
+
+    pub fn wakeup(&self, enforce: bool, _direction: Direction) -> Result<(), io::Error> {
+        let need_wakeup = enforce
+            || unsafe {
+                (*self.tx_ring.mmap.flags).load(Ordering::Relaxed) & libc::XDP_RING_NEED_WAKEUP != 0
+            };
+        if need_wakeup
+            && 0 > unsafe {
+                libc::sendto(
+                    self.fd.as_raw_fd(),
+                    ptr::null(),
+                    0,
+                    libc::MSG_DONTWAIT,
+                    ptr::null(),
+                    0,
+                )
+            }
+        {
+            match io::Error::last_os_error().raw_os_error() {
+                None | Some(libc::EBUSY | libc::ENOBUFS | libc::EAGAIN) => {}
+                Some(libc::ENETDOWN) => {
+                    // TODO: better handling
+                    log::warn!("network interface is down, cannot wake up");
+                }
+                Some(e) => {
+                    return Err(io::Error::from_raw_os_error(e));
+                }
+            }
+        }
+        Ok(())
     }
 }
 

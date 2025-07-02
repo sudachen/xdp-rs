@@ -17,25 +17,25 @@
 //   - The test succeeds if the ping-pong communication completes successfully.
 //
 
-pub mod suite;
-pub mod xdp;
+pub mod toolkit;
+use nettest::suite::{command, runner};
 
 use std::io::Result;
 
 #[tokio::main]
 pub async fn main() -> Result<()> {
-    suite::command::setup(&[
+    command::setup(&[
         caps::Capability::CAP_NET_ADMIN,
         caps::Capability::CAP_NET_RAW,
     ])?;
-    let e = suite::runner::run_test_with_pair(|host_pair| async move {
+    let e = runner::run_test_with_pair(|host_pair| async move {
         log::debug!("Running test");
         log::info!("starting pong host on {}", host_pair.host1.if_dev);
         let host1_ip = host_pair.host1.ip.clone();
         let ponger_shutdown = tokio_util::sync::CancellationToken::new();
         let token = ponger_shutdown.clone();
         let ponger = tokio::task::spawn_blocking(move || {
-            match suite::udp_pingpong::run_ponger(&format!("{host1_ip}:9001"), token) {
+            match nettest::tool::udp_pingpong::run_ponger(&format!("{host1_ip}:9001"), token) {
                 Ok(_) => log::info!("Ponger completed successfully on {}", host1_ip),
                 Err(e) => log::error!("Failed to complete ponger on {}: {}", host1_ip, e),
             }
@@ -45,7 +45,7 @@ pub async fn main() -> Result<()> {
         let host0_ip = host_pair.host0.ip.clone();
         let host1_ip = host_pair.host1.ip.clone();
         let pinger = tokio::task::spawn_blocking(move || {
-            match xdp::xdp_pinger(&host0_ip, 9000, &host1_ip, 9001) {
+            match toolkit::xdp_pinger::run_pinger(&host0_ip, 9000, &host1_ip, 9001) {
                 Ok(_) => log::info!("Pinger completed successfully on {}", host0_ip),
                 Err(e) => log::error!("Failed to complete pinger on {}: {}", host0_ip, e),
             }

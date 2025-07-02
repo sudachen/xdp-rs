@@ -1,4 +1,4 @@
-use crate::suite::veth;
+use crate::suite::vethpair;
 use std::future::Future;
 use std::io::{ErrorKind, Result};
 
@@ -38,15 +38,15 @@ where
     F: FnOnce(HostPair) -> Fut,
     Fut: Future<Output = Result<()>>,
 {
-    if let Err(e) = veth::check_pair(DEV_PREFIX) {
+    if let Err(e) = vethpair::check_pair(DEV_PREFIX) {
         if e.kind() == ErrorKind::NotFound {
-            veth::setup_pair(DEV_PREFIX, IP_PREFIX)?;
+            vethpair::setup_pair(DEV_PREFIX, IP_PREFIX)?;
         } else {
             return Err(e);
         }
     }
     let host_pair = HostPair::from_prefixes(DEV_PREFIX, IP_PREFIX);
     test(host_pair).await?;
-    veth::teardown_pair(DEV_PREFIX)?;
+    vethpair::teardown_pair(DEV_PREFIX)?;
     Ok(())
 }

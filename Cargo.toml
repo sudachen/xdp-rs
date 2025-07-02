@@ -1,6 +1,7 @@
 [workspace]
 members = [
-    "xdp",
+    "nettest",
+    "xdp-socket",
 ]
 
 resolver = "2"
@@ -29,3 +30,4 @@ unused_trait_names = "warn"
 
 [workspace.lints.rust]
 unused-extern-crates = "warn"
+
