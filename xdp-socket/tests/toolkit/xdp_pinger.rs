@@ -1,19 +1,21 @@
 use std::io::{Error, Result};
 use std::net::Ipv4Addr;
 use std::str::FromStr;
-use xdp_socket::{AfXdpSocket, DeviceQueue, Direction, Neighbor, Router, get_ipv4_address};
+use xdp_socket::{create_tx_socket, Direction, util::{Neighbor, Router, get_ipv4_address}};
 
 pub fn run_pinger(src_ip: &str, src_port: u16, dst_ip: &str, dst_port: u16) -> Result<()> {
     let src_addr = Ipv4Addr::from_str(src_ip)
         .map_err(|e| Error::other(format!("invalid IP address: {}", e)))?;
     let dst_addr = Ipv4Addr::from_str(dst_ip)
         .map_err(|e| Error::other(format!("invalid IP address: {}", e)))?;
+    eprintln!("Addresses: {:#?} ", get_ipv4_address(None)
+        .map_err(|e| Error::other(format!("Failed to get IP address: {}", e)))?);
     let if_index = get_ipv4_address(None)?
         .iter()
         .find(|(addr, _)| *addr == src_addr)
         .ok_or_else(|| Error::other(format!("Source IP {} not found", src_ip)))?
         .1;
-
+    eprintln!("Interface index: {}", if_index);
     let src_mac = eui48::MacAddress::from_str("fa:95:2c:e3:0e:a5")
         .map_err(|e| Error::other(format!("invalid MAC address: {}", e)))?
         .to_array();
@@ -21,7 +23,7 @@ pub fn run_pinger(src_ip: &str, src_port: u16, dst_ip: &str, dst_port: u16) -> R
         .map_err(|e| Error::other(format!("invalid MAC address: {}", e)))?
         .to_array();
 
-    let mut socket = AfXdpSocket::new(DeviceQueue::form_ifindex(if_index), Direction::Tx, None)
+    let mut socket = create_tx_socket(if_index,0,None)
         .map_err(|e| Error::other(format!("Failed to create XDP socket: {}", e)))?;
 
     log::debug!("Create router for interface index {}", if_index);
@@ -48,7 +50,7 @@ pub fn run_pinger(src_ip: &str, src_port: u16, dst_ip: &str, dst_port: u16) -> R
 
     log::debug!("Next hop for {}: {:?}", dst_ip, next_hop);
     let data = b"PING";
-    let hdr = xdp_socket::packet::write_udp_header_for(
+    let hdr = xdp_socket::util::write_udp_header_for(
         data,
         src_addr,
         src_mac,
@@ -58,14 +60,9 @@ pub fn run_pinger(src_ip: &str, src_port: u16, dst_ip: &str, dst_port: u16) -> R
         dst_port,
     )?;
     socket
-        .tx()?
-        .send_and_kick(data, Some(&hdr))
+        .send_blocking(data, Some(&hdr))
         .map_err(|e| Error::other(format!("Failed to write header: {:?}", e)))?;
     log::debug!("Sent PING packet from {} to {}", src_ip, dst_ip);
-    /*socket
-    .tx()?
-    .wait_for_completion()
-    .map_err(|e| Error::other(format!("Failed to wait for completion: {:?}", e)))?;*/
     log::debug!("Packet completed");
     Ok(())
 }

@@ -20,7 +20,7 @@
 //   - Gateway: Represents a default gateway.
 //
 
-pub use crate::netlink::{Ipv4Route, Neighbor, get_ipv4_routes, get_neighbors};
+pub use crate::util::netlink::{Ipv4Route, Neighbor, get_ipv4_routes, get_neighbors};
 use ipnet::Ipv4Net;
 use prefix_trie::PrefixMap;
 use std::collections::HashMap;

@@ -1,6 +1,5 @@
 #![cfg(test)]
 
-use crate::write_udp_header_for;
 use etherparse::{SlicedPacket, TransportSlice};
 use std::io::Write;
 use std::net::Ipv4Addr;
@@ -14,7 +13,7 @@ fn test_write_udp_header() {
     let src_port = 12345;
     let dst_port = 54321;
     let data = b"Hello, XDP!";
-    let hdr = write_udp_header_for(
+    let hdr = crate::util::write_udp_header_for(
         data, src_addr, src_mac, src_port, dst_addr, dst_mac, dst_port,
     )
     .unwrap();
@@ -36,14 +35,14 @@ fn test_hdrwrite() {
     let mut hdr = [0u8; 42];
     let data = b"Test data";
     let written = {
-        let mut writer = crate::packet::HdrWrite(&mut hdr, 0);
+        let mut writer = crate::util::packet::HdrWrite(&mut hdr, 0);
         writer.write(data).unwrap()
     };
     assert_eq!(written, data.len());
     assert_eq!(&hdr[..written], data);
     let data = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaTest data";
     let written = {
-        let mut writer = crate::packet::HdrWrite(&mut hdr, 0);
+        let mut writer = crate::util::packet::HdrWrite(&mut hdr, 0);
         writer.write(data).unwrap()
     };
     assert_eq!(written, data.len());

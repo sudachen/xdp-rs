@@ -76,6 +76,12 @@ where
             (*self.mmap.consumer).store(value, std::sync::atomic::Ordering::Release);
         }
     }
+    
+    pub fn flags(&self) -> u32 {
+        unsafe {
+            (*self.mmap.flags).load(std::sync::atomic::Ordering::Acquire)
+        }
+    }
     pub fn increment(&self, value: &mut u32) -> u32 {
         *value = (*value + 1) & (self.len - 1) as u32;
         *value
@@ -104,13 +110,13 @@ impl Ring<XdpDesc> {
             }
         }
     }
-    pub fn mut_bytes_at(&mut self, umem: &mut OwnedMmap, index: u32, len: usize) -> &mut [u8] {
+    pub fn mut_bytes_at(&mut self, ptr: *mut u8, index: u32, len: usize) -> &mut [u8] {
         debug_assert!(index < FRAME_COUNT as u32);
         debug_assert!((len as u32) < FRAME_SIZE as u32);
         let desc = self.mut_desc_at(index);
-        debug_assert!(umem.1 > desc.addr as usize + len);
+        debug_assert!(FRAME_SIZE*FRAME_COUNT > desc.addr as usize + len);
         unsafe {
-            let ptr = umem.as_u8_ptr().offset(desc.addr as isize);
+            let ptr = ptr.offset(desc.addr as isize);
             desc.len = len as u32;
             slice::from_raw_parts_mut(ptr, len)
         }
