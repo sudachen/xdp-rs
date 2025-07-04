@@ -42,12 +42,18 @@ impl XdpDesc {
 pub struct Ring<T> {
     pub mmap: RingMmap<T>,
     pub len: usize,
+    pub mod_mask: u32,
 }
 
 impl<T> Ring<T>
 where
     T: Copy,
 {
+    #[inline]
+    pub fn frame_size(&self) -> u64 {
+        FRAME_SIZE as u64
+    }
+    
     pub fn mmap(
         fd: i32,
         len: usize,
@@ -58,6 +64,7 @@ where
         Ok(Ring {
             mmap: mmap_ring(fd, len * size_of::<T>(), offsets, ring_type)?,
             len,
+            mod_mask: len as u32 - 1,
         })
     }
     pub fn consumer(&self) -> u32 {
@@ -98,13 +105,22 @@ where
     }
 }
 
+impl Ring<u64> {
+    pub fn fill(&mut self, start_frame: u32) {
+        for i in 0..self.len as u32 {
+            let desc = self.mut_desc_at(i);
+            *desc = (i + start_frame) as u64 * FRAME_SIZE as u64;
+        }
+    }    
+}
+
 impl Ring<XdpDesc> {
     pub fn fill(&mut self, start_frame: u32) {
-        debug_assert!((start_frame as usize) < self.len);
+        eprintln!("start_frame: {}", start_frame);
         for i in 0..self.len as u32 {
-            let desc = self.mut_desc_at(i + start_frame);
+            let desc = self.mut_desc_at(i);
             *desc = XdpDesc {
-                addr: i as u64 * FRAME_SIZE as u64,
+                addr: (i + start_frame) as u64 * FRAME_SIZE as u64,
                 len: 0,
                 options: 0,
             }
@@ -114,6 +130,7 @@ impl Ring<XdpDesc> {
         debug_assert!(index < FRAME_COUNT as u32);
         debug_assert!((len as u32) < FRAME_SIZE as u32);
         let desc = self.mut_desc_at(index);
+        eprintln!("desc: {:?}", desc);
         debug_assert!(FRAME_SIZE*FRAME_COUNT > desc.addr as usize + len);
         unsafe {
             let ptr = ptr.offset(desc.addr as isize);

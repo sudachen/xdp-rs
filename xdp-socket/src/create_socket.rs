@@ -122,22 +122,21 @@ pub fn create_socket(
         )));
     }
 
-    tx_ring.fill(0);
     let inner = Arc::new(Inner { umem, fd });
 
     let tx_socket = if direction != Direction::Rx {
-        Some(TxSocket::new(
-            Some(inner.clone()),
-            tx_ring,
-            c_ring,
-            tx_ring_size,
-        ))
+        Some(TxSocket::new(Some(inner.clone()), tx_ring, c_ring, 0))
     } else {
         None
     };
 
     let rx_socket = if direction != Direction::Tx {
-        Some(RxSocket::new(Some(inner.clone()), rx_ring, f_ring, 0))
+        Some(RxSocket::new(
+            Some(inner.clone()),
+            rx_ring,
+            f_ring,
+            tx_ring_size,
+        ))
     } else {
         None
     };

@@ -31,7 +31,9 @@ pub struct Socket<const t:_Direction> {
     pub(crate) inner: Option<Arc<Inner>>,
     pub(crate) x_ring: Ring<XdpDesc>,
     pub(crate) u_ring: Ring<u64>,
-    pub(crate) tail: u32,
+    pub(crate) available: u32,
+    pub(crate) producer: u32,
+    pub(crate) consumer: u32,
     pub(crate) frames: *mut u8,
     pub(crate) skip_frames: usize,
     pub(crate) frames_count: usize,
@@ -56,12 +58,25 @@ impl<const t:_Direction> Socket<t> where Socket<t>: Seek_<t> {
     /// # Returns
     ///
     /// A new `Socket` instance constructed from the given arguments.
-    pub fn new(inner:Option<Arc<Inner>>, x_ring: Ring<XdpDesc>, u_ring: Ring<u64>, skip_frames: usize) -> Self {
+    pub fn new(inner:Option<Arc<Inner>>, mut x_ring: Ring<XdpDesc>, mut u_ring: Ring<u64>, skip_frames: usize) -> Self {
         if let Some(inner) = inner {
+            match t {
+                _TX => {
+                    // all frames available for sending packets
+                    x_ring.fill(skip_frames as u32);
+                }
+                _RX => {
+                    // all frames available for receiving packets
+                    u_ring.fill(skip_frames as u32);
+                    u_ring.update_producer(u_ring.len as u32);
+                }
+            };
             Self {
                 frames: inner.umem.0 as *mut u8,
                 frames_count: x_ring.len,
-                tail: x_ring.len.saturating_sub(1) as u32,
+                available: x_ring.len as u32,
+                producer: 0,
+                consumer: 0,
                 inner: Some(inner),
                 x_ring,
                 u_ring,
@@ -112,6 +127,7 @@ impl<const t:_Direction> Socket<t> where Socket<t>: Seek_<t> {
         Ok(())
     }
     fn peek_(&mut self, x_head: u32, len: usize) -> Result<(&mut [u8], u32), RingError> {
+        eprintln!("x_head={}", x_head);
         let buf = self.x_ring.mut_bytes_at(self.frames, x_head, len);
         Ok((buf, x_head))
     }
@@ -162,7 +178,9 @@ impl<const t:_Direction> Default for Socket<t> {
             inner: None,
             x_ring: Default::default(),
             u_ring: Default::default(),
-            tail: 0,
+            available: 0,
+            producer: 0,
+            consumer: 0,
             frames: ptr::null_mut(),
             skip_frames: 0,
             frames_count: 0,

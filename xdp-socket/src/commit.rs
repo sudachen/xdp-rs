@@ -1,18 +1,14 @@
-use crate::ring::XdpDesc;
 use crate::socket::{RingError, Socket, _TX, _RX};
 
 impl Socket<_TX>  {
     pub fn commit(&mut self, x_head: u32) -> Result<(), RingError> {
-        let tx_ring = &mut self.x_ring;
-        let mut producer = tx_ring.producer();
-        if self.tail == producer {
-            return Err(RingError::RingFull);
-        }
-        tx_ring.increment(&mut producer);
-        if producer != x_head {
+        let x_ring = &mut self.x_ring;
+        if self.available == 0 || x_head != (self.producer & x_ring.mod_mask) {
             return Err(RingError::InvalidTxHead);
         }
-        tx_ring.update_producer(x_head);
+        self.available -= 1;
+        self.producer += 1;
+        x_ring.update_producer(self.producer);
         Ok(())
     }
 }
