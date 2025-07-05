@@ -1,63 +1,93 @@
-use std::{io, ptr};
-use std::sync::atomic::Ordering;
-use std::os::fd::{AsRawFd as _};
-use crate::socket::{_RX, _TX, _Direction, Socket};
+//! # XDP Socket Kernel Wakeup
+//!
+//! ## Purpose
+//!
+//! This file implements the `kick` method for the `Socket`. The purpose of this method
+//! is to notify the kernel that it needs to process packets in one of the XDP rings,
+//! especially when the `XDP_USE_NEED_WAKEUP` flag is in use.
+//!
+//! ## How it works
+//!
+//! The `kick` method checks if the `XDP_RING_NEED_WAKEUP` flag is set in the ring's
+//! flags field. If it is (or if the wakeup is manually enforced), it performs a syscall
+//! (`sendto` for TX, `recvfrom` for RX) with a zero-length buffer. This syscall does not
+//! transfer data but serves as a signal to wake up the kernel and prompt it to check the
+//! rings for new descriptors to process.
+//!
+//! ## Main components
+//!
+//! - `impl<const T:_Direction> Socket<T>`: An implementation block for the generic socket.
+//! - `kick()`: The public method that performs the wakeup call to the kernel.
 
-impl<const t:_Direction> Socket<t> {
-    /// Wakes up the kernel, so it can process packets in the ring.
+use std::{io, ptr};
+use std::os::fd::AsRawFd;
+use std::sync::atomic::Ordering;
+
+use crate::socket::{_Direction, _RX, _TX, Socket};
+
+/// Implements the kernel wakeup logic for `Socket`.
+impl<const T: _Direction> Socket<T> {
+    /// Wakes up the kernel to process descriptors in the rings.
     ///
-    /// The `enforce` parameter is used to force the wake-up call even if the
-    /// kernel does not require it. This can be used to ensure the kernel is
-    /// aware of packets that were recently added to the ring.
+    /// This method is used to notify the kernel that it needs to process packets,
+    /// which is particularly important when the `XDP_USE_NEED_WAKEUP` flag is set
+    /// on the socket. It checks if the `XDP_RING_NEED_WAKEUP` flag is set in the
+    /// ring's flags field and, if so, performs a syscall to wake up the kernel.
     ///
-    /// If the kernel is not aware of the packets, the `XDP_RING_NEED_WAKEUP`
-    /// flag will be set in the ring's flags. This method checks this flag and
-    /// only performs the wake-up call if it is set or if `enforce` is true.
+    /// # How it works
     ///
-    /// If the wake-up call fails, this method will return the error. If the
-    /// error is `ENETDOWN`, a warning will be logged, but the method will not
-    /// return an error.
-    pub fn kick(&self, enforce: bool) -> Result<(), io::Error> {
+    /// It performs a `sendto` (for TX) or `recvfrom` (for RX) syscall with a
+    /// zero-length buffer. This syscall does not transfer any data but acts as a
+    /// signal to the kernel.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` on success. On failure, it returns an `io::Error`, except
+    /// for certain non-critical errors like `EBUSY` or `EAGAIN`. A warning is
+    /// logged for `ENETDOWN`.
+    pub fn kick(&self) -> Result<(), io::Error> {
         if let Some(inner) = &self.inner {
-            let need_wakeup = enforce
-                || unsafe {
-                (*self.x_ring.mmap.flags).load(Ordering::Relaxed) & libc::XDP_RING_NEED_WAKEUP != 0
-            };
-            if need_wakeup
-                && 0 > unsafe {
-                match t {
-                    _TX => libc::sendto(
-                        inner.fd.as_raw_fd(),
-                        ptr::null(),
-                        0,
-                        libc::MSG_DONTWAIT | libc::MSG_NOSIGNAL,
-                        ptr::null(),
-                        0,
-                    ),
-                    _RX => libc::recvfrom(
-                        inner.fd.as_raw_fd(),
-                        ptr::null_mut(),
-                        0,
-                        libc::MSG_DONTWAIT | libc::MSG_NOSIGNAL,
-                        ptr::null_mut(),
-                        ptr::null_mut(),
-                    )
-                }
-            }
-            {
-                match io::Error::last_os_error().raw_os_error() {
-                    None | Some(libc::EBUSY | libc::ENOBUFS | libc::EAGAIN) => {}
-                    Some(libc::ENETDOWN) => {
-                        // TODO: better handling
-                        log::warn!("network interface is down, cannot wake up");
+            let need_wakeup = unsafe {
+                    (*self.x_ring.mmap.flags).load(Ordering::Relaxed) & libc::XDP_RING_NEED_WAKEUP
+                        != 0
+                };
+
+            if need_wakeup {
+                let ret = unsafe {
+                    match T {
+                        _TX => libc::sendto(
+                            inner.fd.as_raw_fd(),
+                            ptr::null(),
+                            0,
+                            libc::MSG_DONTWAIT | libc::MSG_NOSIGNAL,
+                            ptr::null(),
+                            0,
+                        ),
+                        _RX => libc::recvfrom(
+                            inner.fd.as_raw_fd(),
+                            ptr::null_mut(),
+                            0,
+                            libc::MSG_DONTWAIT | libc::MSG_NOSIGNAL,
+                            ptr::null_mut(),
+                            ptr::null_mut(),
+                        ),
                     }
-                    Some(e) => {
-                        return Err(io::Error::from_raw_os_error(e));
+                };
+
+                if ret < 0 {
+                    match io::Error::last_os_error().raw_os_error() {
+                        None | Some(libc::EBUSY | libc::ENOBUFS | libc::EAGAIN) => {}
+                        Some(libc::ENETDOWN) => {
+                            // TODO: better handling
+                            log::warn!("network interface is down, cannot wake up");
+                        }
+                        Some(e) => {
+                            return Err(io::Error::from_raw_os_error(e));
+                        }
                     }
                 }
             }
         }
         Ok(())
     }
-
 }

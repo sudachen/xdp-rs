@@ -38,3 +38,7 @@ name = "pingpong"
 path = "tests/pingpong.rs"
 harness = false
 
+[[test]]
+name = "try_netlink"
+path = "tests/try_netlink.rs"
+

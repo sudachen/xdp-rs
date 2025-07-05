@@ -1,29 +1,26 @@
-
-//
-// netlink.rs - A low-level interface to the Linux kernel's netlink routing subsystem.
-//
-// Purpose:
-//   This module provides functions to query the kernel for networking information, such as
-//   IPv4 routes, neighbor (ARP) entries, interface addresses, and link-layer details.
-//   It's essential for applications that need to understand the network topology and make
-//   routing decisions without relying on the standard library's higher-level abstractions.
-//
-// How it works:
-//   - It uses a raw `NETLINK_ROUTE` socket to communicate directly with the Linux kernel.
-//   - It leverages the `netlink_packet_core` and `netlink_packet_route` crates to build,
-//     serialize, and deserialize netlink messages.
-//   - A generic `netlink` function handles the common pattern of sending a request and
-//     processing a potentially multi-part response from the kernel.
-//   - Specific getter functions (`get_ipv4_routes`, `get_neighbors`, etc.) use the generic
-//     handler to fetch and parse different types of networking information.
-//
-// Main components:
-//   - Data Structures: `Link`, `Ipv4Route`, `Neighbor`, `Gateway` to represent kernel networking objects.
-//   - `netlink()`: A generic function for handling the netlink request/response flow.
-//   - Public API: `get_links()`, `get_ipv4_routes()`, `get_neighbors()`, `get_ipv4_address()` for querying
-//     specific kernel subsystems.
-//   - `find_default_gateway()`: A helper to identify the default gateway from a list of routes.
-//
+//! # Low-Level Netlink Interface
+//!
+//! ## Purpose
+//!
+//! This module provides functions to query the Linux kernel's networking subsystems via
+//! netlink sockets. It is used to fetch information such as network interface details,
+//! IP addresses, routes, and neighbor (ARP) entries.
+//!
+//! ## How it works
+//!
+//! It communicates with the kernel using a raw `NETLINK_ROUTE` socket. The `netlink-packet`
+//! crates are used to construct, serialize, and deserialize netlink messages. A generic
+//! `netlink` function handles the common pattern of sending a request and processing a
+//! potentially multi-part response. Specific functions like `get_ipv4_routes` and
+//! `get_neighbors` use this generic handler to fetch and parse different types of data.
+//!
+//! ## Main components
+//!
+//! - `netlink()`: A generic function for the netlink request/response message loop.
+//! - `get_links()`, `get_ipv4_routes()`, `get_neighbors()`, `get_ipv4_address()`: Public
+//!   functions for querying specific kernel data.
+//! - `Link`, `Ipv4Route`, `Neighbor`: Structs that represent the networking objects
+//!   retrieved from the kernel.
 
 use netlink_packet_core::{
     NLM_F_DUMP, NLM_F_REQUEST, NetlinkDeserializable, NetlinkMessage, NetlinkPayload,
@@ -40,37 +37,70 @@ use netlink_sys::{Socket, SocketAddr};
 use std::io;
 use std::net::{IpAddr, Ipv4Addr};
 
+/// Represents a network interface link.
 #[derive(Clone, Debug, Default)]
 pub struct Link {
+    /// The interface index.
     pub if_index: u32,
+    /// The interface name (e.g., "eth0").
     pub name: String,
+    /// The Maximum Transmission Unit (MTU) of the interface.
     pub mtu: u32,
+    /// The MAC address of the interface.
     pub mac: [u8; 6],
 }
 
+/// Represents an IPv4 route.
 #[derive(Clone, Copy, Debug)]
 pub struct Ipv4Route {
+    /// The destination prefix length (CIDR).
     pub dest_prefix: u8,
+    /// The destination IPv4 address.
     pub destination: Ipv4Addr,
+    /// The gateway IP address, if any.
     pub gateway: Option<Ipv4Addr>,
+    /// The index of the output interface.
     pub out_if_index: Option<u32>,
+    /// The priority of the route. Lower values are preferred.
     pub priority: u32,
 }
 
+/// Represents a neighbor (ARP) entry.
 #[derive(Clone, Copy, Debug)]
 pub struct Neighbor {
+    /// The neighbor's IPv4 address.
     pub ip: Ipv4Addr,
+    /// The neighbor's MAC address.
     pub mac: [u8; 6],
+    /// The index of the interface this neighbor is associated with.
     pub if_index: u32,
 }
 
+/// Represents a default gateway.
 #[derive(Clone, Copy, Debug)]
 pub struct Gateway {
+    /// The gateway's IPv4 address.
     pub ip: Ipv4Addr,
+    /// The priority of the route to this gateway.
     pub priority: u32,
+    /// The index of the output interface for this gateway.
     pub if_index: u32,
 }
 
+/// A generic function to send a netlink request and parse the response.
+///
+/// This function handles the low-level details of creating a netlink socket,
+/// sending a request message, and iterating through the potentially multi-part
+/// response from the kernel.
+///
+/// # How it works
+///
+/// It opens a `NETLINK_ROUTE` socket and binds it. The provided request message
+/// is serialized and sent to the kernel. It then enters a loop, receiving
+/// response messages from the socket. Each message is deserialized and passed to
+/// the provided closure `f` for processing. The loop continues until all parts
+/// of the kernel's response have been read. The results from the closure are
+/// collected into a `Vec` and returned.
 pub fn netlink<T, F, R>(mut req: NetlinkMessage<T>, f: F) -> Result<Vec<R>, io::Error>
 where
     T: NetlinkSerializable + NetlinkDeserializable,
@@ -106,6 +136,17 @@ where
     Ok(result)
 }
 
+/// Retrieves a list of neighbor (ARP) entries from the kernel.
+///
+/// Optionally filters neighbors by a specific interface index.
+///
+/// # How it works
+///
+/// It constructs a `GetNeighbour` netlink request and sends it using the generic
+/// `netlink` function. The response parsing closure extracts neighbor details
+/// like IP address, MAC address, and interface index from each `NewNeighbour`
+/// message. If an `if_index` is provided, it filters the results to include
+/// only neighbors on that interface.
 pub fn get_neighbors(if_index: Option<u32>) -> Result<Vec<Neighbor>, io::Error> {
     let mut req_msg = NeighbourMessage::default();
     req_msg.header.family = AddressFamily::Inet;
@@ -144,6 +185,17 @@ pub fn get_neighbors(if_index: Option<u32>) -> Result<Vec<Neighbor>, io::Error> 
     })
 }
 
+/// Retrieves a list of IPv4 routes from the kernel.
+///
+/// Optionally filters routes by a specific output interface index.
+///
+/// # How it works
+///
+/// It constructs a `GetRoute` netlink request for the IPv4 address family and
+/// sends it using the generic `netlink` function. The response parsing closure
+/// processes each `NewRoute` message, extracting attributes like destination,
+/// gateway, and priority. If an `if_index` is provided, it filters the results
+/// to include only routes that use that output interface.
 pub fn get_ipv4_routes(if_index: Option<u32>) -> Result<Vec<Ipv4Route>, io::Error> {
     let mut req_msg = RouteMessage::default();
     req_msg.header.address_family = AddressFamily::Inet;
@@ -186,6 +238,9 @@ pub fn get_ipv4_routes(if_index: Option<u32>) -> Result<Vec<Ipv4Route>, io::Erro
     })
 }
 
+/// Retrieves IPv4 addresses associated with network interfaces.
+///
+/// Optionally filters addresses by a specific interface index.
 pub fn get_ipv4_address(if_index: Option<u32>) -> Result<Vec<(Ipv4Addr, u32)>, io::Error> {
     let mut req_msg = AddressMessage::default();
     req_msg.header.family = AddressFamily::Inet;
@@ -208,6 +263,14 @@ pub fn get_ipv4_address(if_index: Option<u32>) -> Result<Vec<(Ipv4Addr, u32)>, i
     })
 }
 
+/// Retrieves a list of all network interfaces (links) from the kernel.
+///
+/// # How it works
+///
+/// It constructs a `GetLink` netlink request and sends it using the generic
+/// `netlink` function. The response parsing closure processes each `NewLink`
+/// message, extracting attributes like interface index, name, MTU, and MAC
+/// address to build a `Link` struct for each interface.
 pub fn get_links() -> Result<Vec<Link>, io::Error> {
     let req_msg = LinkMessage::default();
     let req = NetlinkMessage::from(RouteNetlinkMessage::GetLink(req_msg));
@@ -243,6 +306,19 @@ pub fn get_links() -> Result<Vec<Link>, io::Error> {
     })
 }
 
+/// Finds the default gateway from a list of IPv4 routes.
+///
+/// The default gateway is identified as the route with a destination prefix of 0
+/// and the highest priority.
+///
+/// # How it works
+///
+/// It iterates through the provided slice of `Ipv4Route` structs. It looks for
+/// routes with a `dest_prefix` of 0, which signifies a default route. Among
+/// these, it selects the one with the highest `priority` value (note: in some
+/// contexts, lower is better, but here we assume higher value means higher
+/// priority as per the existing fold logic). It returns a `Gateway` struct
+/// containing the gateway's IP, priority, and output interface index.
 pub fn find_default_gateway(routes: &[Ipv4Route]) -> Option<Gateway> {
     routes
         .iter()
