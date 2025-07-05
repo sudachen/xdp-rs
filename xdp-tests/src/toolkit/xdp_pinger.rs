@@ -2,7 +2,7 @@ use std::io::{Error, Result};
 use std::net::Ipv4Addr;
 use std::str::FromStr;
 use std::time;
-use xdp_socket::{create_tx_socket, Direction, util::{Neighbor, Router, get_ipv4_address}};
+use xdp_socket::{create_tx_socket, util::{Neighbor, Router, get_ipv4_address}};
 
 pub fn run_pinger(src_ip: &str, src_port: u16, dst_ip: &str, dst_port: u16) -> Result<()> {
     let src_addr = Ipv4Addr::from_str(src_ip)

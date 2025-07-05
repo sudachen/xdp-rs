@@ -205,7 +205,6 @@ impl Ring<XdpDesc> {
     /// # Arguments
     /// * `start_frame` - The starting frame number to begin filling from.
     pub fn fill(&mut self, start_frame: u32) {
-        eprintln!("start_frame: {}", start_frame);
         for i in 0..self.len as u32 {
             let desc = self.mut_desc_at(i);
             *desc = XdpDesc {
@@ -225,11 +224,16 @@ impl Ring<XdpDesc> {
     ///
     /// This function will panic in debug builds if the index or length are out of bounds.
     pub fn mut_bytes_at(&mut self, ptr: *mut u8, index: u32, len: usize) -> &mut [u8] {
-        debug_assert!(index < FRAME_COUNT as u32);
-        debug_assert!((len as u32) < FRAME_SIZE as u32);
+        #[cfg(not(feature="no_safety_checks"))]
+        assert!(index < FRAME_COUNT as u32);
+        #[cfg(not(feature="no_safety_checks"))]
+        assert!((len as u32) < FRAME_SIZE as u32);
+
         let desc = self.mut_desc_at(index);
-        eprintln!("desc: {:?}", desc);
-        debug_assert!(FRAME_SIZE * FRAME_COUNT > desc.addr as usize + len);
+
+        #[cfg(not(feature="no_safety_checks"))]
+        assert!(FRAME_SIZE * FRAME_COUNT > desc.addr as usize + len);
+
         unsafe {
             let ptr = ptr.offset(desc.addr as isize);
             desc.len = len as u32;
@@ -241,6 +245,11 @@ impl Ring<XdpDesc> {
     ///
     /// The address is calculated based on the index and frame size.
     pub fn set(&mut self, index: u32, len: u32) {
+        #[cfg(not(feature="no_safety_checks"))]
+        assert!(index < FRAME_COUNT as u32);
+        #[cfg(not(feature="no_safety_checks"))]
+        assert!((len as u32) < FRAME_SIZE as u32);
+
         let desc = self.mut_desc_at(index);
         *desc = XdpDesc {
             addr: (index as u64 * FRAME_SIZE as u64),

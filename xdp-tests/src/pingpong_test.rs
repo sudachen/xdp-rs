@@ -19,6 +19,7 @@
 
 pub mod toolkit;
 pub mod nettest;
+pub mod xdp;
 
 use nettest::suite::{command, runner};
 use std::io::Result;
@@ -36,12 +37,12 @@ pub async fn main() -> Result<()> {
 
         log::debug!("setting up DXP pass on host {}", host_pair.host0);
         /*let _owned_xdp_host0 =
-            xdp_socket::util::xdp_attach_pass_program(host_pair.host0.if_index).map_err(|e| {
+            xdp::attach_pass_program(host_pair.host0.if_index).map_err(|e| {
                 log::error!("Failed to attach XDP pass program on {}: {}", host_pair.host0, e);
                 e
             })?;*/
         let _owned_xdp_host1 =
-            xdp_socket::util::xdp_attach_pass_program(host_pair.host1.if_index).map_err(|e| {
+            xdp::attach_pass_program(host_pair.host1.if_index).map_err(|e| {
                 log::error!("Failed to attach XDP pass program on {}: {}", host_pair.host1, e);
                 e
             })?;

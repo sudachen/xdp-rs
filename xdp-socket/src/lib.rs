@@ -21,3 +21,4 @@ pub mod kick;
 pub mod seek;
 #[doc(hidden)]
 pub mod send;
+mod peek;

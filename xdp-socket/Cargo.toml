@@ -26,17 +26,10 @@ tokio = { workspace = true, features = ["full"] }
 tokio-util = { workspace = true }
 exec = { version = "0.3.1" }
 caps = { workspace = true }
-include_bytes_aligned = { version = "0.1.4" }
 
 [dev-dependencies]
 eui48 = { version = "0.5.1" }
 env_logger = { workspace = true }
 
-[[test]]
-name = "pingpong"
-path = "tests/pingpong.rs"
-harness = false
-
-[[test]]
-name = "try_netlink"
-path = "tests/try_netlink.rs"
+[features]
+"no_safety_checks" = []

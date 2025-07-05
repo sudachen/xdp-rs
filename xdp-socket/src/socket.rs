@@ -31,6 +31,9 @@
 //!   respectively, providing a more intuitive API for users.
 
 #![allow(private_interfaces)]
+#![allow(private_bounds)]
+#![allow(non_upper_case_globals)]
+
 use crate::mmap::OwnedMmap;
 use crate::ring::{Ring, XdpDesc};
 use std::os::fd::{AsRawFd as _, OwnedFd};
@@ -57,10 +60,6 @@ pub struct Socket<const t: _Direction> {
     pub(crate) consumer: u32,
     /// A raw pointer to the start of the UMEM frames area.
     pub(crate) frames: *mut u8,
-    /// The number of frames at the start of the UMEM to skip.
-    pub(crate) skip_frames: usize,
-    /// The total number of frames in the UMEM.
-    pub(crate) frames_count: usize,
 }
 
 /// An error that can occur during ring operations.
@@ -70,17 +69,16 @@ pub enum RingError {
     RingFull,
     /// The ring is empty, and no items can be retrieved.
     RingEmpty,
-    /// The TX ring head is in an invalid state.
     NotAvailable,
-    /// The RX ring head is in an invalid state.
-    InvalidRxHead,
+    InvalidIndex,
+    InvalidLength,
     /// An underlying I/O error occurred.
     Io(io::Error),
 }
 
 impl<const t: _Direction> Socket<t>
 where
-    Socket<t>: Seek_<t>,
+    Socket<t>: Seek_<t> + Commit_<t> + Peek_<t>,
 {
     /// Constructs a new `Socket`.
     ///
@@ -115,14 +113,12 @@ where
             };
             Self {
                 frames: inner.umem.0 as *mut u8,
-                frames_count: x_ring.len,
                 available: x_ring.len as u32,
                 producer: 0,
                 consumer: 0,
                 inner: Some(inner),
                 x_ring,
                 u_ring,
-                skip_frames,
             }
         } else {
             Self::default()
@@ -167,25 +163,6 @@ where
         Ok(())
     }
 
-    /// Internal helper for peeking at a chunk in the ring without advancing the head.
-    ///
-    /// This function is used by `peek` and `peek_n` to peek at a chunk in the ring
-    /// without advancing the head.
-    ///
-    /// # Arguments
-    ///
-    /// * `x_head` - The head index of the descriptor to peek at.
-    /// * `len` - The length of the chunk to peek at.
-    ///
-    /// # Returns
-    ///
-    /// A `Result` containing a mutable slice into the UMEM if successful, or a
-    /// `RingError` if the operation fails.
-    fn peek_(&mut self, x_head: u32, len: usize) -> Result<&mut [u8], RingError> {
-        let buf = self.x_ring.mut_bytes_at(self.frames, x_head, len);
-        Ok(buf)
-    }
-
     /// Peeks at the next available chunk in the ring without advancing the head.
     ///
     /// This function finds the next available descriptor using `seek` and returns a
@@ -198,9 +175,14 @@ where
     /// # Returns
     ///
     /// A `Result` containing a mutable byte slice and its corresponding descriptor index.
+    #[inline]
     pub fn peek(&mut self, len: usize) -> Result<&mut [u8], RingError> {
-        let (tx_head,_) = self.seek_()?;
-        self.peek_(tx_head, len)
+        self.peek_(1, len)
+    }
+
+    #[inline]
+    pub fn peek_at(&mut self, index:usize,  len: usize) -> Result<&mut [u8], RingError> {
+        self.peek_(index, len)
     }
 
     /// Returns the number of available frames in the ring.
@@ -212,31 +194,26 @@ where
     ///
     /// A `Result` containing the number of available frames, or a `RingError` if
     /// the operation fails.
+    #[inline]
     pub fn seek(&mut self) -> Result<usize, RingError> {
-        let (_, available) = self.seek_()?;
-        Ok(available as usize)
+        self.seek_(1)
     }
 
-    /// Peeks at the `index`-th available chunk in the ring without advancing the head.
-    ///
-    /// This function finds the `index`-th descriptor in the range of AVAILABLE descriptors
-    /// and returns a mutable slice into the UMEM for writing (TX) or reading (RX).
-    ///
-    /// # Arguments
-    ///
-    /// * `len` - The desired length of the chunk.
-    /// * `index` - The index of the chunk in the available frames.
-    ///
-    /// # Returns
-    ///
-    /// A `Result` containing a mutable byte slice and its corresponding descriptor index.
-    ///
-    pub fn peek_n(&mut self, len: usize, index: usize) -> Result<&mut [u8], RingError> {
-        debug_assert!(len < self.frame_size() as usize, "Length exceeds frame size");
-        debug_assert!(self.available > index as u32, "Index out of bounds for available frames");
-        let x_head = (self.producer + index as u32) & self.x_ring.mod_mask;
-        self.peek_(x_head, len)
+    #[inline]
+    pub fn seek_n(&mut self, count: usize) -> Result<usize, RingError> {
+        self.seek_(count)
     }
+
+    #[inline]
+    pub fn commit(&mut self) -> Result<(), RingError> {
+        self.commit_(1)
+    }
+
+    #[inline]
+    pub fn commit_n(&mut self, n: usize) -> Result<(), RingError> {
+        self.commit_(n)
+    }
+
 
     /// Returns the size of a single frame in the UMEM.
     ///
@@ -274,16 +251,21 @@ impl<const t: _Direction> Default for Socket<t> {
             producer: 0,
             consumer: 0,
             frames: ptr::null_mut(),
-            skip_frames: 0,
-            frames_count: 0,
         }
     }
 }
 
 /// A trait for direction-specific seeking logic (TX vs. RX).
 pub(crate) trait Seek_<const t: _Direction> {
-    /// Finds the next available descriptor in the ring.
-    fn seek_(&mut self) -> Result<(u32,u32), RingError>;
+    fn seek_(&mut self, count: usize) -> Result<usize, RingError>;
+}
+
+pub(crate) trait Commit_<const t: _Direction> {
+    fn commit_(&mut self, count: usize) -> Result<(), RingError>;
+}
+
+pub(crate) trait Peek_<const t: _Direction> {
+    fn peek_(&mut self, index: usize, len: usize) -> Result<&mut [u8], RingError>;
 }
 
 /// Holds the owned components of an XDP socket that can be shared.

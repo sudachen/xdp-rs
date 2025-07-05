@@ -22,12 +22,10 @@
 pub mod netlink;
 pub mod packet;
 pub mod router;
-pub mod xdp;
-pub mod xdp_pass;
+pub mod xdp_prog;
 
 pub use netlink::{find_default_gateway, get_ipv4_address, get_links, netlink, get_ipv4_routes, get_neighbors};
 pub use packet::write_udp_header_for;
 pub use router::{Ipv4Route, Neighbor, NextHop, Router};
-pub use xdp::{ xdp_attach_program, OwnedXdpProg };
-pub use xdp_pass::{  xdp_attach_pass_program };
+pub use xdp_prog::{OwnedXdpProg, xdp_features, xdp_attach_program};
 

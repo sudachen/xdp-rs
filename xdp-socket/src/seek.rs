@@ -22,53 +22,60 @@
 //!   transmit socket, which involves managing available frames and reclaiming completed ones.
 
 use crate::ring::XdpDesc;
-use crate::socket::{RingError, Socket, Seek_, _TX, _RX};
+use crate::socket::{_RX, _TX, RingError, Seek_, Socket};
 
 /// Implements the seeking logic for a transmit (`TX`) socket.
 impl Seek_<_TX> for Socket<_TX> {
-
-    /// Finds the next available descriptor in the ring for a new operation.
+    /// Seeks to the next available descriptor in the TX ring by reclaiming completed
+    /// packets from the Completion Ring.
     ///
-    /// This method implements the seeking logic for a transmit (`TX`) socket.
-    /// It first checks if there are pre-allocated, available frames in the TX ring.
-    /// If not, it checks the Completion Ring for descriptors of packets that the
-    /// kernel has finished sending. It reclaims these completed descriptors, making
-    /// their associated UMEM frames available for new transmissions, and then returns
-    /// the index of the next free TX slot.
+    /// # Arguments
+    ///
+    /// * `count` - The number of descriptors to seek.
     ///
     /// # Returns
     ///
-    /// A `Result` containing the index of the next available descriptor and the
-    /// number of available frames.
-    fn seek_(&mut self) -> Result<(u32,u32), RingError> {
-        if self.available != 0 {
-            let x_head = self.producer & self.x_ring.mod_mask;
-            return Ok((x_head,self.available));
+    /// A `Result` containing the number of descriptors successfully sought, or a
+    /// `RingError` if the operation fails.
+    fn seek_(&mut self, count: usize) -> Result<usize, RingError> {
+        if self.available as usize >= count {
+            return Ok(count);
         }
         let c_ring = &mut self.u_ring;
         let c_producer = c_ring.producer();
-        if c_producer == (self.consumer & c_ring.mod_mask) {
+        if c_producer == self.consumer {
             Err(RingError::RingFull)
         } else {
-            let c_head = self.consumer & c_ring.mod_mask;
-            let addr = c_ring.desc_at(c_head);
-            let desc = XdpDesc::new(addr, 0, 0);
-            self.consumer += 1;
-            c_ring.update_consumer(self.consumer);
-            let x_head = self.producer & self.x_ring.mod_mask;
-            *self.x_ring.mut_desc_at(x_head) = desc;
-            self.available += 1;
-            Ok((x_head,self.available))
+            loop {
+                let c_head = self.consumer & c_ring.mod_mask;
+                let addr = c_ring.desc_at(c_head);
+                let desc = XdpDesc::new(addr, 0, 0);
+                self.consumer = self.consumer.wrapping_add(1);
+                c_ring.update_consumer(self.consumer);
+                let x_head = self.producer & self.x_ring.mod_mask;
+                *self.x_ring.mut_desc_at(x_head) = desc;
+                self.available += 1;
+                if self.available as usize >= count || c_producer == self.consumer {
+                    break;
+                }
+            }
+            Ok(self.available as usize)
         }
     }
 }
 
 /// Implements the seeking logic for a receive (`RX`) socket.
 impl Seek_<_RX> for Socket<_RX> {
-    /// Finds the next available descriptor in the RX ring for receiving a packet.
-    ///
-    /// This is currently a placeholder and will be implemented in the future.
-    fn seek_(&mut self) -> Result<(u32,u32), RingError> {
-        todo!()
+    fn seek_(&mut self, count: usize) -> Result<usize, RingError> {
+        if self.available as usize >= count {
+            return Ok(count);
+        }
+        let x_producer = self.x_ring.producer();
+        if x_producer == self.consumer {
+            Err(RingError::RingEmpty)
+        } else {
+            self.available = x_producer.wrapping_sub(self.consumer);
+            Ok(self.available.min(count as u32) as usize)
+        }
     }
 }

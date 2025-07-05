@@ -1,8 +1,5 @@
 [workspace]
-members = [
-    "ebpf-programs",
-    "xdp-socket",
-]
+members = [ "xdp-socket", "xdp-tests" ]
 
 resolver = "2"
 
@@ -10,10 +7,10 @@ resolver = "2"
 authors = ["Alexey Sudachen"]
 edition = "2024"
 homepage = "https://github.com/sudachen/xdp-rs"
-license = "MIT OR Apache-2.0"
-# TODO: Update the repository URL to the actual repository of your project
+license = "MIT"
 repository = "https://github.com/sudachen/xdp-rs"
 rust-version = "1.85.0"
+readme = "README.md"
 
 [workspace.dependencies]
 libc = { version = "0.2.105", default-features = false }

@@ -61,8 +61,8 @@ pub fn xdp_attach_program(if_index: u32, code: &'static [u8], name: &'static str
         bpf_link: std::ptr::null_mut(),
     };
 
-    let mut bpf_obj = &mut owned_prog.bpf_obj;
-    let mut bpf_link= &mut owned_prog.bpf_link;
+    let bpf_obj = &mut owned_prog.bpf_obj;
+    let bpf_link= &mut owned_prog.bpf_link;
 
     unsafe {
         let mut opts: libbpf_sys::bpf_object_open_opts = std::mem::zeroed();

@@ -8,7 +8,7 @@
 //!
 //! ## How it works
 //!
-//! The `commit` function updates the producer index of the TX ring (`x_ring`), which
+//! The `commit_` function updates the producer index of the TX ring (`x_ring`), which
 //! effectively hands over the descriptor to the kernel for sending. It also decrements
 //! the count of available frames. It includes a check to ensure the commit operation
 //! is valid and corresponds to the expected descriptor head.
@@ -19,10 +19,10 @@
 //! - `commit()`: The public method that commits a single packet descriptor to the TX ring,
 //!   making it available for the kernel to send.
 
-use crate::socket::{RingError, Socket, _TX};
+use crate::socket::{RingError, Socket, Commit_, _TX, _RX};
 
 /// Implements the commit logic for a transmit (`TX`) socket.
-impl Socket<_TX> {
+impl Commit_<_TX> for Socket<_TX> {
     /// Commits a number of descriptors to the TX ring, making them available for the kernel to send.
     ///
     /// This method should be called after packet data has been written to the UMEM
@@ -41,32 +41,35 @@ impl Socket<_TX> {
     /// # Errors
     ///
     /// Returns `RingError::NotAvailable` if there are not enough available frames to commit.
-    pub fn commit_n(&mut self, count: usize) -> Result<(), RingError> {
-        let x_ring = &mut self.x_ring;
+    fn commit_(&mut self, count: usize) -> Result<(), RingError> {
+        #[cfg(not(feature="no_safety_checks"))]
         if self.available < count as u32 {
             return Err(RingError::NotAvailable);
         }
         self.available -= count as u32;
-        self.producer += count as u32;
-        x_ring.update_producer(self.producer);
+        self.producer = self.producer.wrapping_add(count as u32);
+        self.x_ring.update_producer(self.producer);
         Ok(())
     }
+}
 
-    /// Commits a single descriptor to the TX ring.
-    ///
-    /// This method is a convenience wrapper around `commit_n` that commits exactly one
-    /// descriptor. It is typically used when only a single packet has been prepared
-    /// for transmission.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on success.
-    ///
-    /// # Errors
-    ///
-    /// Returns a `RingError` if the operation fails, such as when there are no
-    /// available frames to commit.
-    pub fn commit(&mut self) -> Result<(), RingError> {
-        self.commit_n(1)
+impl Commit_<_RX> for Socket<_RX> {
+    fn commit_(&mut self, count: usize) -> Result<(), RingError> {
+        #[cfg(not(feature="no_safety_checks"))]
+        if self.available < count as u32 {
+            return Err(RingError::NotAvailable);
+        }
+        let f_ring = &mut self.u_ring;
+        let x_ring = &mut self.x_ring;
+        for _ in 0..(count as u32) {
+            let addr = x_ring.desc_at(self.consumer & x_ring.mod_mask).addr;
+            *f_ring.mut_desc_at(self.producer & x_ring.mod_mask) = addr;
+            self.consumer = self.consumer.wrapping_add(1);
+            self.producer = self.producer.wrapping_add(1);
+        }
+        self.available -= count as u32;
+        x_ring.update_consumer(self.consumer);
+        f_ring.update_producer(self.producer);
+        Ok(())
     }
 }
