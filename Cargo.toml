@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "nettest",
+    "ebpf-programs",
     "xdp-socket",
 ]
 
@@ -16,7 +16,6 @@ repository = "https://github.com/sudachen/xdp-rs"
 rust-version = "1.85.0"
 
 [workspace.dependencies]
-anyhow = { version = "1", default-features = false }
 libc = { version = "0.2.105", default-features = false }
 tokio = { version = "1.24.0", default-features = false }
 tokio-util = { version = "0.7.10", default-features = false }

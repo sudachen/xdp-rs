@@ -1,4 +1,4 @@
-use crate::suite::command::execute_sudo_command;
+use crate::nettest::suite::command::execute_sudo_command;
 use std::io::{Error, ErrorKind, Result};
 
 pub fn setup_pair(dev_prefix: &str, ip_prefix: &str) -> Result<()> {

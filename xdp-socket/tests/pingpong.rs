@@ -18,8 +18,9 @@
 //
 
 pub mod toolkit;
-use nettest::suite::{command, runner};
+pub mod nettest;
 
+use nettest::suite::{command, runner};
 use std::io::Result;
 
 #[tokio::main]
@@ -27,11 +28,26 @@ pub async fn main() -> Result<()> {
     command::setup(&[
         caps::Capability::CAP_NET_ADMIN,
         caps::Capability::CAP_NET_RAW,
+        caps::Capability::CAP_BPF,
     ])?;
+
     let e = runner::run_test_with_pair(|host_pair| async move {
         log::debug!("Running test");
+
+        log::debug!("setting up DXP pass on host {}", host_pair.host0);
+        /*let _owned_xdp_host0 =
+            xdp_socket::util::xdp_attach_pass_program(host_pair.host0.if_index).map_err(|e| {
+                log::error!("Failed to attach XDP pass program on {}: {}", host_pair.host0, e);
+                e
+            })?;*/
+        let _owned_xdp_host1 =
+            xdp_socket::util::xdp_attach_pass_program(host_pair.host1.if_index).map_err(|e| {
+                log::error!("Failed to attach XDP pass program on {}: {}", host_pair.host1, e);
+                e
+            })?;
+
         log::info!("starting pong host on {}", host_pair.host1.if_dev);
-        let host1_ip = host_pair.host1.ip.clone();
+        let host1_ip = host_pair.host1.ip_str.clone();
         let ponger_shutdown = tokio_util::sync::CancellationToken::new();
         let token = ponger_shutdown.clone();
         let ponger = tokio::task::spawn_blocking(move || {
@@ -42,8 +58,8 @@ pub async fn main() -> Result<()> {
         });
         tokio::time::sleep(std::time::Duration::from_millis(300)).await; // Give ponger time to start
         log::info!("starting ping host on {}", host_pair.host0.if_dev);
-        let host0_ip = host_pair.host0.ip.clone();
-        let host1_ip = host_pair.host1.ip.clone();
+        let host0_ip = host_pair.host0.ip_str.clone();
+        let host1_ip = host_pair.host1.ip_str.clone();
         let pinger = tokio::task::spawn_blocking(move || {
             match toolkit::xdp_pinger::run_pinger(&host0_ip, 9000, &host1_ip, 9001) {
                 Ok(_) => log::info!("Pinger completed successfully on {}", host0_ip),

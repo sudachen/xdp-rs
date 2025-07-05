@@ -26,23 +26,24 @@ use crate::socket::{RingError, Socket, Seek_, _TX, _RX};
 
 /// Implements the seeking logic for a transmit (`TX`) socket.
 impl Seek_<_TX> for Socket<_TX> {
-    /// Finds the next available descriptor in the TX ring for sending a packet.
+
+    /// Finds the next available descriptor in the ring for a new operation.
     ///
-    /// # How it works
+    /// This method implements the seeking logic for a transmit (`TX`) socket.
+    /// It first checks if there are pre-allocated, available frames in the TX ring.
+    /// If not, it checks the Completion Ring for descriptors of packets that the
+    /// kernel has finished sending. It reclaims these completed descriptors, making
+    /// their associated UMEM frames available for new transmissions, and then returns
+    /// the index of the next free TX slot.
     ///
-    /// 1.  It first checks if there are any locally cached available descriptors. If so,
-    ///     it returns the index of the next one.
-    /// 2.  If not, it checks the Completion Ring to see if the kernel has finished
-    ///     transmitting any packets.
-    /// 3.  If the Completion Ring has descriptors, it reclaims one, moves its
-    ///     corresponding UMEM frame address to the TX ring, and returns the index
-    ///     of that new descriptor in the TX ring.
-    /// 4.  If the Completion Ring is empty, it means the TX ring is full and no
-    ///     frames can be reclaimed. In this case it returns a `RingFull` error.
-    fn seek_(&mut self) -> Result<u32, RingError> {
+    /// # Returns
+    ///
+    /// A `Result` containing the index of the next available descriptor and the
+    /// number of available frames.
+    fn seek_(&mut self) -> Result<(u32,u32), RingError> {
         if self.available != 0 {
             let x_head = self.producer & self.x_ring.mod_mask;
-            return Ok(x_head);
+            return Ok((x_head,self.available));
         }
         let c_ring = &mut self.u_ring;
         let c_producer = c_ring.producer();
@@ -57,7 +58,7 @@ impl Seek_<_TX> for Socket<_TX> {
             let x_head = self.producer & self.x_ring.mod_mask;
             *self.x_ring.mut_desc_at(x_head) = desc;
             self.available += 1;
-            Ok(x_head)
+            Ok((x_head,self.available))
         }
     }
 }
@@ -67,7 +68,7 @@ impl Seek_<_RX> for Socket<_RX> {
     /// Finds the next available descriptor in the RX ring for receiving a packet.
     ///
     /// This is currently a placeholder and will be implemented in the future.
-    fn seek_(&mut self) -> Result<u32, RingError> {
+    fn seek_(&mut self) -> Result<(u32,u32), RingError> {
         todo!()
     }
 }

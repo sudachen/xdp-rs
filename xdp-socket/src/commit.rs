@@ -23,16 +23,16 @@ use crate::socket::{RingError, Socket, _TX};
 
 /// Implements the commit logic for a transmit (`TX`) socket.
 impl Socket<_TX> {
-    /// Commits a descriptor to the TX ring, making it available for the kernel to send.
+    /// Commits a number of descriptors to the TX ring, making them available for the kernel to send.
     ///
     /// This method should be called after packet data has been written to the UMEM
-    /// frame corresponding to the descriptor at `x_head`. It updates the producer
-    /// index of the TX ring, signaling to the kernel that a new packet is ready.
+    /// frames corresponding to the descriptors. It updates the producer
+    /// index of the TX ring, signaling to the kernel that new packets are ready.
     ///
     /// # Arguments
     ///
-    /// * `x_head` - The index of the descriptor in the TX ring to commit. This must
-    ///   match the current producer head of the ring.
+    /// * `count` - The number of descriptors to commit. This must not exceed the
+    ///   number of available frames in the ring.
     ///
     /// # Returns
     ///
@@ -40,16 +40,33 @@ impl Socket<_TX> {
     ///
     /// # Errors
     ///
-    /// Returns `RingError::InvalidTxHead` if `x_head` does not match the expected
-    /// producer index or if there are no available frames to commit.
-    pub fn commit(&mut self, x_head: u32) -> Result<(), RingError> {
+    /// Returns `RingError::NotAvailable` if there are not enough available frames to commit.
+    pub fn commit_n(&mut self, count: usize) -> Result<(), RingError> {
         let x_ring = &mut self.x_ring;
-        if self.available == 0 || x_head != (self.producer & x_ring.mod_mask) {
-            return Err(RingError::InvalidTxHead);
+        if self.available < count as u32 {
+            return Err(RingError::NotAvailable);
         }
-        self.available -= 1;
-        self.producer += 1;
+        self.available -= count as u32;
+        self.producer += count as u32;
         x_ring.update_producer(self.producer);
         Ok(())
+    }
+
+    /// Commits a single descriptor to the TX ring.
+    ///
+    /// This method is a convenience wrapper around `commit_n` that commits exactly one
+    /// descriptor. It is typically used when only a single packet has been prepared
+    /// for transmission.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` on success.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `RingError` if the operation fails, such as when there are no
+    /// available frames to commit.
+    pub fn commit(&mut self) -> Result<(), RingError> {
+        self.commit_n(1)
     }
 }

@@ -1,6 +1,7 @@
 use std::io::{Error, Result};
 use std::net::Ipv4Addr;
 use std::str::FromStr;
+use std::time;
 use xdp_socket::{create_tx_socket, Direction, util::{Neighbor, Router, get_ipv4_address}};
 
 pub fn run_pinger(src_ip: &str, src_port: u16, dst_ip: &str, dst_port: u16) -> Result<()> {
@@ -59,9 +60,12 @@ pub fn run_pinger(src_ip: &str, src_port: u16, dst_ip: &str, dst_port: u16) -> R
         next_hop.mac_addr.unwrap(),
         dst_port,
     )?;
-    socket
-        .send_blocking(data, Some(&hdr))
-        .map_err(|e| Error::other(format!("Failed to write header: {:?}", e)))?;
+    loop {
+        socket
+            .send_blocking(data, Some(&hdr))
+            .map_err(|e| Error::other(format!("Failed to write header: {:?}", e)))?;
+        std::thread::sleep(time::Duration::from_millis(300));
+    }
     log::debug!("Sent PING packet from {} to {}", src_ip, dst_ip);
     log::debug!("Packet completed");
     Ok(())
