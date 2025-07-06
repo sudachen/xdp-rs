@@ -30,7 +30,7 @@ First, add `xdp-socket` to your `Cargo.toml` dependencies:
 
 ```toml
 [dependencies]
-xdp-socket = "0.1.0" # Replace with the latest version
+xdp-socket = "0.1" # Replace with the latest version
 ```
 
 Here is a basic example of how to create a `TxSocket` and send a UDP packet:
