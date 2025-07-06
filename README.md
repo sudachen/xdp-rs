@@ -1,4 +1,3 @@
-
 ## Motivation
 
 Existing XDP socket **crates** are often too high-level and complex. This **crate** provides a simple, low-level API to control an XDP socket efficiently and without extra overhead.
@@ -24,3 +23,12 @@ A batching API (`seek_n`, `peek_at`, `commit_n`) is also available for both send
 ## Performance
 
 This API allows an application to run on an isolated CPU core without yielding to the scheduler. By avoiding these context switches, it achieves the high performance and low latency needed for heavy-load applications.
+
+## Usage
+
+Add `xdp-socket` to your `Cargo.toml` dependencies:
+
+```toml
+[dependencies]
+xdp-socket = "0.1.0"
+```
