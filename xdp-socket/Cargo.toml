@@ -1,7 +1,6 @@
 [package]
 name = "xdp-socket"
-version = "0.1.0"
-
+version.workspace = true
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true
@@ -9,6 +8,8 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 readme.workspace = true
+
+description = "Simple and fast API to use XDP sockets in Rust"
 
 [lints]
 workspace = true
