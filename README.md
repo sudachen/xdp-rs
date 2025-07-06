@@ -1,10 +1,9 @@
 
-### ## Motivation
+## Motivation
 
 Existing XDP socket **crates** are often too high-level and complex. This **crate** provides a simple, low-level API to control an XDP socket efficiently and without extra overhead.
 
----
-### ## API Design
+## API Design
 
 The **crate** provides two main socket types: `TxSocket` for sending (transmitting) data and `RxSocket` for receiving data. A bidirectional socket is handled as a pair of `TxSocket` and `RxSocket`.
 
@@ -22,7 +21,6 @@ Instead of a basic `send`/`recv` model, the main API uses a `seek`/`peek`/`commi
 
 A batching API (`seek_n`, `peek_at`, `commit_n`) is also available for both sending and receiving, which allows you to process multiple frames at once for better efficiency.
 
----
-### ## Performance
+## Performance
 
 This API allows an application to run on an isolated CPU core without yielding to the scheduler. By avoiding these context switches, it achieves the high performance and low latency needed for heavy-load applications.
