@@ -8,11 +8,11 @@
 //!
 //! ## How it works
 //!
-//! The `send` method orchestrates the sending process. It first calls `peek` to acquire
-//! a writable buffer (a frame in the UMEM) and a corresponding TX descriptor index.
-//! It then copies the user's packet data into this buffer. Finally, it calls `commit`
-//! to submit the descriptor to the kernel for transmission. It also provides a
-//! `send_blocking` variant that waits for the send to complete.
+//! The user must first call `seek` or `seek_n` to ensure one or more UMEM frames
+//! are available for writing. The `send` method then takes the user's packet data,
+//! copies it into the next available frame, and calls `commit` to submit the
+//! descriptor to the kernel for transmission. It also provides a `send_blocking`
+//! variant that waits for the send to complete.
 //!
 //! ## Main components
 //!
@@ -28,9 +28,12 @@ use crate::socket::{RingError,_TX,Socket};
 impl Socket<_TX> {
     /// Sends a packet in a non-blocking manner.
     ///
-    /// This method acquires a buffer from the UMEM, copies the header (if any) and
-    /// data into it, and then commits it to the TX ring for the kernel to send.
-    /// It will return a `RingError::RingFull` if no space is available.
+    /// This method copies the provided data into a UMEM frame that has been
+    /// previously acquired via a call to `seek` or `seek_n`, and then submits it
+    /// to the kernel for transmission.
+    ///
+    /// Before calling this function, you must ensure that a frame is available by
+    /// calling `seek` or `seek_n`.
     ///
     /// # Arguments
     /// * `data` - A byte slice containing the packet payload.
@@ -39,6 +42,12 @@ impl Socket<_TX> {
     ///
     /// # Returns
     /// A `Result` indicating success or a `RingError` on failure.
+    ///
+    /// # Errors
+    ///
+    /// Returns `RingError::InvalidLength` if `data.len() + header.len()` exceeds
+    /// the UMEM frame size. Returns `RingError::InvalidIndex` if `seek` has not
+    /// been called to make a frame available.
     pub fn send(&mut self, data: &[u8], header: Option<&[u8]>) -> Result<(), RingError> {
         let hdr_len = header.map_or(0, |h| h.len());
         let buf_len = data.len() + hdr_len;
@@ -50,10 +59,13 @@ impl Socket<_TX> {
         self.commit()
     }
 
-    /// Sends a packet and blocks until the operation is complete.
+    /// Sends a packet and blocks until the kernel has processed the send.
     ///
-    /// This method first calls `send` to queue the packet and then calls `poll_wait`
-    /// to block until the kernel has processed the send operation.
+    /// This method first calls `send` to queue the packet and then blocks, waiting
+    /// for a kernel notification that the send is complete.
+    ///
+    /// Before calling this function, you must ensure that a frame is available by
+    /// calling `seek` or `seek_n`.
     ///
     /// # Arguments
     /// * `data` - A byte slice containing the packet payload.
@@ -61,6 +73,11 @@ impl Socket<_TX> {
     ///
     /// # Returns
     /// A `Result` indicating success or a `RingError` on failure.
+    ///
+    /// # Errors
+    ///
+    /// In addition to the errors from `send`, this function can return
+    /// `RingError::Io` if the underlying `poll_wait` fails.
     pub fn send_blocking(&mut self, data: &[u8], header: Option<&[u8]>) -> Result<(), RingError> {
         self.send(data, header)?;
         self.poll_wait(None).map_err(RingError::Io)?;

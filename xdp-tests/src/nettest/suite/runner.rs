@@ -3,7 +3,7 @@ use crate::nettest::suite::vethpair;
 use std::future::Future;
 use std::io::{Error, ErrorKind, Result};
 use std::net::Ipv4Addr;
-use std::str::FromStr;
+use std::str::FromStr as _;
 use xdp_socket::util::get_ipv4_address;
 
 pub const DEV_PREFIX: &str = "xdpVeth";
@@ -61,8 +61,8 @@ impl HostPair {
     }
 
     pub fn from_prefixes(dev_prefix: &str, ip_prefix: &str) -> Self {
-        let host0 = Host::new(format!("{}0", dev_prefix), format!("{}100", ip_prefix));
-        let host1 = Host::new(format!("{}1", dev_prefix), format!("{}101", ip_prefix));
+        let host0 = Host::new(format!("{dev_prefix}0"), format!("{ip_prefix}100"));
+        let host1 = Host::new(format!("{dev_prefix}1"), format!("{ip_prefix}101"));
         HostPair::new(host0, host1)
     }
 }

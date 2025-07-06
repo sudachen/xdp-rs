@@ -20,7 +20,6 @@
 //! - `kick()`: The public method that performs the wakeup call to the kernel.
 
 use std::{io, ptr};
-use std::os::fd::AsRawFd;
 use std::sync::atomic::Ordering;
 
 use crate::socket::{_Direction, _RX, _TX, Socket};
@@ -46,44 +45,42 @@ impl<const T: _Direction> Socket<T> {
     /// for certain non-critical errors like `EBUSY` or `EAGAIN`. A warning is
     /// logged for `ENETDOWN`.
     pub fn kick(&self) -> Result<(), io::Error> {
-        if let Some(inner) = &self.inner {
-            let need_wakeup = unsafe {
-                    (*self.x_ring.mmap.flags).load(Ordering::Relaxed) & libc::XDP_RING_NEED_WAKEUP
-                        != 0
-                };
+        let need_wakeup = unsafe {
+                (*self.x_ring.mmap.flags).load(Ordering::Relaxed) & libc::XDP_RING_NEED_WAKEUP
+                    != 0
+            };
 
-            if need_wakeup {
-                let ret = unsafe {
-                    match T {
-                        _TX => libc::sendto(
-                            inner.fd.as_raw_fd(),
-                            ptr::null(),
-                            0,
-                            libc::MSG_DONTWAIT | libc::MSG_NOSIGNAL,
-                            ptr::null(),
-                            0,
-                        ),
-                        _RX => libc::recvfrom(
-                            inner.fd.as_raw_fd(),
-                            ptr::null_mut(),
-                            0,
-                            libc::MSG_DONTWAIT | libc::MSG_NOSIGNAL,
-                            ptr::null_mut(),
-                            ptr::null_mut(),
-                        ),
+        if need_wakeup {
+            let ret = unsafe {
+                match T {
+                    _TX => libc::sendto(
+                        self.raw_fd,
+                        ptr::null(),
+                        0,
+                        libc::MSG_DONTWAIT | libc::MSG_NOSIGNAL,
+                        ptr::null(),
+                        0,
+                    ),
+                    _RX => libc::recvfrom(
+                        self.raw_fd,
+                        ptr::null_mut(),
+                        0,
+                        libc::MSG_DONTWAIT | libc::MSG_NOSIGNAL,
+                        ptr::null_mut(),
+                        ptr::null_mut(),
+                    ),
+                }
+            };
+
+            if ret < 0 {
+                match io::Error::last_os_error().raw_os_error() {
+                    None | Some(libc::EBUSY | libc::ENOBUFS | libc::EAGAIN) => {}
+                    Some(libc::ENETDOWN) => {
+                        // TODO: better handling
+                        log::warn!("network interface is down, cannot wake up");
                     }
-                };
-
-                if ret < 0 {
-                    match io::Error::last_os_error().raw_os_error() {
-                        None | Some(libc::EBUSY | libc::ENOBUFS | libc::EAGAIN) => {}
-                        Some(libc::ENETDOWN) => {
-                            // TODO: better handling
-                            log::warn!("network interface is down, cannot wake up");
-                        }
-                        Some(e) => {
-                            return Err(io::Error::from_raw_os_error(e));
-                        }
+                    Some(e) => {
+                        return Err(io::Error::from_raw_os_error(e));
                     }
                 }
             }

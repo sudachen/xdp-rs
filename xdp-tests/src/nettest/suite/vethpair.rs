@@ -2,56 +2,56 @@ use crate::nettest::suite::command::execute_sudo_command;
 use std::io::{Error, ErrorKind, Result};
 
 pub fn setup_pair(dev_prefix: &str, ip_prefix: &str) -> Result<()> {
-    log::info!("creating new veth pair {0}0 + {0}1", dev_prefix);
-    execute_sudo_command(&format!("ip link add {0}0 type veth peer {0}1", dev_prefix))?;
+    log::info!("creating new veth pair {dev_prefix}0 + {dev_prefix}1");
+    execute_sudo_command(&format!("ip link add {dev_prefix}0 type veth peer {dev_prefix}1"))?;
     up_pair(dev_prefix, ip_prefix)?;
     Ok(())
 }
 
 pub fn teardown_pair(prefix: &str) -> Result<()> {
-    log::info!("tearing down veth pair {0}0", prefix);
-    execute_sudo_command(&format!("ip link del {0}0", prefix))?;
+    log::info!("tearing down veth pair {prefix}0");
+    execute_sudo_command(&format!("ip link del {prefix}0"))?;
     Ok(())
 }
 
 pub fn check_pair(prefix: &str) -> Result<()> {
-    log::info!("checking for veth pair {0}0 + {0}1", prefix);
+    log::info!("checking for veth pair {prefix}0 + {prefix}1");
     let output = std::process::Command::new("ip")
         .arg("link")
         .arg("show")
-        .arg(format!("{}0", prefix))
+        .arg(format!("{prefix}0"))
         .output()?;
     if output.status.success() {
         Ok(())
     } else {
         Err(Error::new(
             ErrorKind::NotFound,
-            format!("Pair {}0 does not exist", prefix),
+            format!("Pair {prefix}0 does not exist"),
         ))
     }
 }
 
 pub fn up_if_dev(dev: &str) -> Result<()> {
-    log::info!("setting interface {0} up", dev);
-    execute_sudo_command(&format!("ip link set {0} up", dev))?;
+    log::info!("setting interface {dev} up");
+    execute_sudo_command(&format!("ip link set {dev} up"))?;
     Ok(())
 }
 
 pub fn up_pair(dev_prefix: &str, ip_prefix: &str) -> Result<()> {
-    let dev = format!("{}0", dev_prefix);
-    set_ipv4_addr(&dev, &format!("{}100", ip_prefix))?;
+    let dev = format!("{dev_prefix}0");
+    set_ipv4_addr(&dev, &format!("{ip_prefix}100"))?;
     set_promisc_mode(&dev, true)?;
     up_if_dev(&dev)?;
-    let dev = format!("{}1", dev_prefix);
-    set_ipv4_addr(&dev, &format!("{}101", ip_prefix))?;
+    let dev = format!("{dev_prefix}1");
+    set_ipv4_addr(&dev, &format!("{ip_prefix}101"))?;
     set_promisc_mode(&dev, true)?;
     up_if_dev(&dev)?;
     Ok(())
 }
 
 pub fn set_ipv4_addr(dev: &str, addr: &str) -> Result<()> {
-    log::info!("setting IPv4 address {0} on {1}", addr, dev);
-    execute_sudo_command(&format!("ip addr add {0}/24 dev {1}", addr, dev))?;
+    log::info!("setting IPv4 address {addr} on {dev}");
+    execute_sudo_command(&format!("ip addr add {addr}/24 dev {dev}"))?;
     Ok(())
 }
 
@@ -61,6 +61,6 @@ pub fn set_promisc_mode(dev: &str, enable: bool) -> Result<()> {
         if enable { "on" } else { "off" }
     );
     let mode = if enable { "on" } else { "off" };
-    execute_sudo_command(&format!("ip link set {0} promisc {1}", dev, mode))?;
+    execute_sudo_command(&format!("ip link set {dev} promisc {mode}"))?;
     Ok(())
 }

@@ -49,6 +49,8 @@ pub struct RingMmap<T> {
     /// A pointer to the atomic flags field of the ring.
     pub flags: *mut AtomicU32,
 }
+
+
 impl<T> Default for RingMmap<T> {
     fn default() -> Self {
         RingMmap {
@@ -223,7 +225,7 @@ impl Ring<XdpDesc> {
     /// # Panics
     ///
     /// This function will panic in debug builds if the index or length are out of bounds.
-    pub fn mut_bytes_at(&mut self, ptr: *mut u8, index: u32, len: usize) -> &mut [u8] {
+    pub(crate) fn mut_bytes_at(&mut self, ptr: *mut u8, index: u32, len: usize) -> &mut [u8] {
         #[cfg(not(feature="no_safety_checks"))]
         assert!(index < FRAME_COUNT as u32);
         #[cfg(not(feature="no_safety_checks"))]
@@ -235,9 +237,9 @@ impl Ring<XdpDesc> {
         assert!(FRAME_SIZE * FRAME_COUNT > desc.addr as usize + len);
 
         unsafe {
-            let ptr = ptr.offset(desc.addr as isize);
+            let buf_ptr = ptr.offset(desc.addr as isize);
             desc.len = len as u32;
-            slice::from_raw_parts_mut(ptr, len)
+            slice::from_raw_parts_mut(buf_ptr, len)
         }
     }
 
@@ -248,7 +250,7 @@ impl Ring<XdpDesc> {
         #[cfg(not(feature="no_safety_checks"))]
         assert!(index < FRAME_COUNT as u32);
         #[cfg(not(feature="no_safety_checks"))]
-        assert!((len as u32) < FRAME_SIZE as u32);
+        assert!(len < FRAME_SIZE as u32);
 
         let desc = self.mut_desc_at(index);
         *desc = XdpDesc {

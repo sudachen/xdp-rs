@@ -31,6 +31,5 @@ caps = { workspace = true }
 [dev-dependencies]
 eui48 = { version = "0.5.1" }
 env_logger = { workspace = true }
-
 [features]
 "no_safety_checks" = []

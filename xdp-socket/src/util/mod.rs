@@ -23,9 +23,10 @@ pub mod netlink;
 pub mod packet;
 pub mod router;
 pub mod xdp_prog;
+pub mod mac_by_ifindex;
 
 pub use netlink::{find_default_gateway, get_ipv4_address, get_links, netlink, get_ipv4_routes, get_neighbors};
 pub use packet::write_udp_header_for;
 pub use router::{Ipv4Route, Neighbor, NextHop, Router};
 pub use xdp_prog::{OwnedXdpProg, xdp_features, xdp_attach_program};
-
+pub use mac_by_ifindex::mac_by_ifindex;

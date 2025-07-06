@@ -5,12 +5,12 @@ use tokio_util::sync::CancellationToken;
 
 pub fn run_pinger(local_addr: &str, remote_addr: &str) -> io::Result<()> {
     let socket = UdpSocket::bind(local_addr)?;
-    log::debug!("[UDP_Pinger] Bound to {}", local_addr);
+    log::debug!("[UDP_Pinger] Bound to {local_addr}");
     socket.connect(remote_addr)?;
-    log::debug!("[UDP_Pinger] Connected to {}", remote_addr);
+    log::debug!("[UDP_Pinger] Connected to {remote_addr}");
     socket.set_read_timeout(Some(Duration::from_secs(5)))?;
     let ping_message = b"PING";
-    log::debug!("[UDP_Pinger] Sending 'PING' to {}...", remote_addr);
+    log::debug!("[UDP_Pinger] Sending 'PING' to {remote_addr}...");
     socket.send(ping_message)?;
     let mut buffer = [0u8; 1024]; // A buffer to store received data.
 
@@ -18,12 +18,11 @@ pub fn run_pinger(local_addr: &str, remote_addr: &str) -> io::Result<()> {
         Ok(number_of_bytes) => {
             let message = &buffer[..number_of_bytes];
             if message == b"PONG" {
-                log::debug!("[UDP_Pinger] Success! Received 'PONG' from {}", remote_addr);
+                log::debug!("[UDP_Pinger] Success! Received 'PONG' from {remote_addr}");
             } else {
                 let received_str = String::from_utf8_lossy(message);
                 log::error!(
-                    "[UDP_Pinger] Received unexpected message: '{}'",
-                    received_str
+                    "[UDP_Pinger] Received unexpected message: '{received_str}'"
                 );
             }
         }
@@ -32,7 +31,7 @@ pub fn run_pinger(local_addr: &str, remote_addr: &str) -> io::Result<()> {
             return Err(e);
         }
         Err(e) => {
-            log::error!("[UDP_Pinger] Error receiving data: {}", e);
+            log::error!("[UDP_Pinger] Error receiving data: {e}");
             return Err(e);
         }
     }
@@ -41,7 +40,7 @@ pub fn run_pinger(local_addr: &str, remote_addr: &str) -> io::Result<()> {
 
 pub fn run_ponger(local_addr: &str, _token: CancellationToken) -> io::Result<()> {
     let socket = UdpSocket::bind(local_addr)?;
-    log::debug!("[UDP_Ponger] Listening on {}...", local_addr);
+    log::debug!("[UDP_Ponger] Listening on {local_addr}...");
     //socket.set_read_timeout(Some(Duration::from_millis(300)))?;
     let mut buffer = [0u8; 1024];
     loop {
@@ -51,15 +50,13 @@ pub fn run_ponger(local_addr: &str, _token: CancellationToken) -> io::Result<()>
                 let message = &buffer[..number_of_bytes];
                 if message == b"PING" {
                     log::debug!(
-                        "[UDP_Ponger] Received 'PING' from {}. Responding...",
-                        src_addr
+                        "[UDP_Ponger] Received 'PING' from {src_addr}. Responding..."
                     );
                     socket.send_to(b"PONG", src_addr)?;
                 } else {
                     let received_str = String::from_utf8_lossy(message);
                     log::debug!(
-                        "[UDP_Ponger] Received unexpected: '{}'. Ignoring.",
-                        received_str
+                        "[UDP_Ponger] Received unexpected: '{received_str}'. Ignoring."
                     );
                 }
                 break;
@@ -72,7 +69,7 @@ pub fn run_ponger(local_addr: &str, _token: CancellationToken) -> io::Result<()>
                 continue;
             }
             Err(e) => {
-                log::error!("[UDP_Ponger] A network error occurred: {}", e);
+                log::error!("[UDP_Ponger] A network error occurred: {e}");
                 break;
             }
         }

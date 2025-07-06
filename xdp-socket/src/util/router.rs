@@ -27,6 +27,20 @@ use std::collections::HashMap;
 use std::io;
 use std::net::Ipv4Addr;
 
+/// Manages a cached view of the system's IPv4 routing and neighbor tables.
+///
+/// It holds the routing table in a prefix trie for efficient longest-prefix-match
+/// lookups and the neighbor (ARP) table in a hash map.
+#[derive(Debug)]
+pub struct Router {
+    /// The network interface index this router is bound to.
+    pub if_index: u32,
+    /// A cache of neighbor (ARP) entries, mapping IP addresses to `Neighbor` structs.
+    pub neighbors: HashMap<Ipv4Addr, Neighbor>,
+    /// A prefix trie (`PrefixMap`) for efficient longest-prefix-match lookups on routes.
+    pub routes: PrefixMap<Ipv4Net, Ipv4Route>,
+}
+
 impl Router {
     /// Creates a new `Router` for a specific network interface.
     ///
@@ -49,20 +63,20 @@ impl Router {
     /// It then looks up the MAC address for that next-hop IP in the `neighbors` cache.
     /// If no route is found via LPM, it attempts a direct lookup in the neighbor cache for the destination IP.
     /// Returns a `NextHop` struct containing the next-hop IP and MAC address if successful.
-    pub fn route(&mut self, dest_ip: Ipv4Addr) -> Option<NextHop> {
-        let dest_net = Ipv4Net::from(dest_ip);
+    pub fn route(&mut self, dest_ip: &Ipv4Addr) -> Option<NextHop> {
+        let dest_net = Ipv4Net::from(*dest_ip);
         if let Some((_, route)) = self.routes.get_lpm(&dest_net) {
-            let ip = route.gateway.unwrap_or(dest_ip);
-            if let Some(neighbour) = self.neighbors.get(&ip) {
+            let ip = route.gateway.as_ref().unwrap_or(dest_ip);
+            if let Some(neighbour) = self.neighbors.get(ip) {
                 return Some(NextHop {
-                    ip_addr: ip,
+                    ip_addr: *ip,
                     mac_addr: Some(neighbour.mac),
                 });
             }
         };
-        if let Some(neighbour) = self.neighbors.get(&dest_ip) {
+        if let Some(neighbour) = self.neighbors.get(dest_ip) {
             return Some(NextHop {
-                ip_addr: dest_ip,
+                ip_addr: *dest_ip,
                 mac_addr: Some(neighbour.mac),
             });
         }
@@ -84,25 +98,14 @@ impl Router {
             let dest_net = Ipv4Net::new(route.destination, route.dest_prefix).map_err(|_| {
                 io::Error::new(io::ErrorKind::InvalidData, "Invalid destination prefix")
             })?;
-            prefix_map.insert(dest_net, route);
+            if route.gateway.is_some() {
+                prefix_map.insert(dest_net, route);
+            }
         }
         self.neighbors = neighbors.into_iter().map(|n| (n.ip, n)).collect();
         self.routes = prefix_map;
         Ok(())
     }
-}
-
-/// Manages a cached view of the system's IPv4 routing and neighbor tables.
-///
-/// It holds the routing table in a prefix trie for efficient longest-prefix-match
-/// lookups and the neighbor (ARP) table in a hash map.
-pub struct Router {
-    /// The network interface index this router is bound to.
-    pub if_index: u32,
-    /// A cache of neighbor (ARP) entries, mapping IP addresses to `Neighbor` structs.
-    pub neighbors: HashMap<Ipv4Addr, Neighbor>,
-    /// A prefix trie (`PrefixMap`) for efficient longest-prefix-match lookups on routes.
-    pub routes: PrefixMap<Ipv4Net, Ipv4Route>,
 }
 
 /// Represents the next hop for an outgoing packet.

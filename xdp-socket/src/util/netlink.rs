@@ -309,16 +309,15 @@ pub fn get_links() -> Result<Vec<Link>, io::Error> {
 /// Finds the default gateway from a list of IPv4 routes.
 ///
 /// The default gateway is identified as the route with a destination prefix of 0
-/// and the highest priority.
+/// and the lowest priority value (metric).
 ///
 /// # How it works
 ///
 /// It iterates through the provided slice of `Ipv4Route` structs. It looks for
 /// routes with a `dest_prefix` of 0, which signifies a default route. Among
-/// these, it selects the one with the highest `priority` value (note: in some
-/// contexts, lower is better, but here we assume higher value means higher
-/// priority as per the existing fold logic). It returns a `Gateway` struct
-/// containing the gateway's IP, priority, and output interface index.
+/// these, it selects the one with the lowest `priority` value, as is standard
+/// for route metrics. It returns a `Gateway` struct containing the gateway's IP,
+/// priority, and output interface index.
 pub fn find_default_gateway(routes: &[Ipv4Route]) -> Option<Gateway> {
     routes
         .iter()
@@ -333,7 +332,7 @@ pub fn find_default_gateway(routes: &[Ipv4Route]) -> Option<Gateway> {
             {
                 match acc {
                     None => Some((*gw, *priority, *oif)),
-                    Some((_, acc_priority, _)) if acc_priority < *priority => {
+                    Some((_, acc_priority, _)) if *priority < acc_priority => {
                         Some((*gw, *priority, *oif))
                     }
                     _ => acc,
@@ -348,3 +347,4 @@ pub fn find_default_gateway(routes: &[Ipv4Route]) -> Option<Gateway> {
             priority,
         })
 }
+

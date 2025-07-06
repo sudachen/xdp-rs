@@ -2,24 +2,34 @@
 //!
 //! ## Purpose
 //!
-//! This file implements the logic for finding the next available descriptor in a ring
-//! for a new operation. For sending (TX), this means finding an empty slot in the TX
-//! ring to place a new packet descriptor.
+//! This file implements the logic for advancing the cursor in an XDP ring to find
+//! the next available descriptor for a new operation. For sending (TX), this means
+//! finding an empty slot in the TX ring to place a new packet descriptor. For
+//! receiving (RX), this means finding a descriptor in the RX ring that points to a
+//! received packet.
 //!
 //! ## How it works
 //!
-//! It implements the `Seek_` trait for `Socket<_TX>`. The `seek_` method first checks
-//! if there are pre-allocated, available frames in the TX ring. If not, it checks the
-//! Completion Ring for descriptors of packets that the kernel has finished sending.
-//! It reclaims these completed descriptors, making their associated UMEM frames
-//! available for new transmissions, and then returns the index of the next free TX slot.
-//! The implementation for RX is currently a placeholder.
+//! It implements the `Seek_` trait for both `Socket<_TX>` and `Socket<_RX>`.
+//!
+//! For `_TX`, the `seek_` method ensures there are enough free descriptors in the TX
+//! ring for sending packets. If the ring is low on free descriptors, it checks the
+//! Completion Ring for packets that the kernel has finished sending. It reclaims
+//! these completed descriptors, making their associated UMEM frames available for new
+//! transmissions, and updates the count of available TX slots.
+//!
+//! For `_RX`, the `seek_` method checks for newly received packets in the RX ring
+//! that are ready to be read by the application. It updates its internal count of
+//! available packets by checking the ring's producer index, which is advanced by the
+//! kernel when packets are received.
 //!
 //! ## Main components
 //!
 //! - `Seek_` trait: Defines the internal `seek_` interface.
 //! - `impl Seek_<_TX> for Socket<_TX>`: The implementation of the seek logic for the
-//!   transmit socket, which involves managing available frames and reclaiming completed ones.
+//!   transmit socket.
+//! - `impl Seek_<_RX> for Socket<_RX>`: The implementation of the seek logic for the
+//!   receive socket.
 
 use crate::ring::XdpDesc;
 use crate::socket::{_RX, _TX, RingError, Seek_, Socket};
@@ -66,6 +76,16 @@ impl Seek_<_TX> for Socket<_TX> {
 
 /// Implements the seeking logic for a receive (`RX`) socket.
 impl Seek_<_RX> for Socket<_RX> {
+    /// Seeks to the next available descriptor in the RX ring.
+    ///
+    /// # Arguments
+    ///
+    /// * `count` - The number of descriptors to seek.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the number of descriptors successfully sought, or a
+    /// `RingError` if the operation fails.
     fn seek_(&mut self, count: usize) -> Result<usize, RingError> {
         if self.available as usize >= count {
             return Ok(count);

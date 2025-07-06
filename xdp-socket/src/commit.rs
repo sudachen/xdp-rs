@@ -1,23 +1,32 @@
-//! # XDP Socket TX Commit
+//! # Descriptor Committing in XDP Rings
 //!
 //! ## Purpose
 //!
-//! This file implements the `commit` method for the transmit socket (`Socket<_TX>`).
-//! This method is called after packet data has been written to a frame in the UMEM.
-//! It finalizes the frame for transmission by the kernel.
+//! This file implements the logic for "committing" descriptors in an XDP ring.
+//! Committing finalizes an operation and makes the descriptor available to the
+//! kernel.
 //!
 //! ## How it works
 //!
-//! The `commit_` function updates the producer index of the TX ring (`x_ring`), which
-//! effectively hands over the descriptor to the kernel for sending. It also decrements
-//! the count of available frames. It includes a check to ensure the commit operation
-//! is valid and corresponds to the expected descriptor head.
+//! It implements the `Commit_` trait for both `Socket<_TX>` and `Socket<_RX>`.
+//!
+//! For `_TX`, committing a descriptor means the application has finished writing
+//! a packet to the associated UMEM frame. The `commit_` function advances the
+//! producer index of the TX ring, signaling to the kernel that the packet is
+//! ready to be sent.
+//!
+//! For `_RX`, committing a descriptor means the application has finished
+//! processing a received packet. The `commit_` function returns the UMEM frame
+//! to the kernel by placing its descriptor in the Fill Ring, making it available
+//! for receiving new packets.
 //!
 //! ## Main components
 //!
-//! - `impl Socket<_TX>`: An implementation block specifically for the transmit socket.
-//! - `commit()`: The public method that commits a single packet descriptor to the TX ring,
-//!   making it available for the kernel to send.
+//! - `Commit_` trait: Defines the internal `commit_` interface.
+//! - `impl Commit_<_TX> for Socket<_TX>`: The implementation of the commit logic
+//!   for the transmit socket.
+//! - `impl Commit_<_RX> for Socket<_RX>`: The implementation of the commit logic
+//!   for the receive socket.
 
 use crate::socket::{RingError, Socket, Commit_, _TX, _RX};
 
@@ -54,6 +63,25 @@ impl Commit_<_TX> for Socket<_TX> {
 }
 
 impl Commit_<_RX> for Socket<_RX> {
+    /// Commits a number of descriptors, returning their UMEM frames to the Fill Ring.
+    ///
+    /// This method should be called after the application has finished processing
+    /// the packets in the UMEM frames corresponding to the descriptors. It returns
+    /// the frames to the kernel so they can be used to receive new packets.
+    ///
+    /// # Arguments
+    ///
+    /// * `count` - The number of descriptors to commit. This must not exceed the
+    ///   number of available frames to be read.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` on success.
+    ///
+    /// # Errors
+    ///
+    /// Returns `RingError::NotAvailable` if `count` is greater than the number of
+    /// packets available to be read.
     fn commit_(&mut self, count: usize) -> Result<(), RingError> {
         #[cfg(not(feature="no_safety_checks"))]
         if self.available < count as u32 {

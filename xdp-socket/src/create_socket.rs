@@ -146,7 +146,11 @@ pub fn create_socket(
         )));
     }
 
-    let inner = Arc::new(Inner { umem, fd });
+    // its just owned shared memory and socket descriptor
+    // that we can share between Tx and Rx sockets
+    // to release it when both are destroyed
+    #[allow(clippy::arc_with_non_send_sync)]
+    let inner = Arc::new(Inner::new(umem,fd));
 
     let tx_socket = if direction != Direction::Rx {
         Some(TxSocket::new(Some(inner.clone()), tx_ring, c_ring, 0))
@@ -185,7 +189,7 @@ pub fn create_tx_socket(
     config: Option<XdpConfig>,
 ) -> Result<TxSocket, io::Error> {
     let (tx_socket, _) = create_socket(if_index, if_queue, Direction::Tx, config)?;
-    Ok(tx_socket.ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to create Tx socket"))?)
+    tx_socket.ok_or_else(|| io::Error::other("Failed to create Tx socket"))
 }
 
 /// Creates an `RxSocket` for receiving packets.
@@ -205,7 +209,7 @@ pub fn create_rx_socket(
     config: Option<XdpConfig>,
 ) -> Result<RxSocket, io::Error> {
     let (_, rx_socket) = create_socket(if_index, if_queue, Direction::Rx, config)?;
-    Ok(rx_socket.ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to create Rx socket"))?)
+    rx_socket.ok_or_else(|| io::Error::other("Failed to create Rx socket"))
 }
 
 /// Creates a pair of sockets (`TxSocket`, `RxSocket`) for bidirectional communication.
@@ -227,8 +231,8 @@ pub fn create_bi_socket(
 ) -> Result<(TxSocket, RxSocket), io::Error> {
     let (tx_socket, rx_socket) = create_socket(if_index, if_queue, Direction::Both, config)?;
     Ok((
-        tx_socket.ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to create Tx socket"))?,
-        rx_socket.ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to create Rx socket"))?,
+        tx_socket.ok_or_else(|| io::Error::other("Failed to create Tx socket"))?,
+        rx_socket.ok_or_else(|| io::Error::other("Failed to create Rx socket"))?,
     ))
 }
 
@@ -321,10 +325,22 @@ pub enum Direction {
 /// Configuration options for creating an AF_XDP socket.
 #[derive(Debug, Copy, Clone, Default)]
 pub struct XdpConfig {
-    /// Force enable or disable zero-copy mode. If `None`, it is kernel-dependent.
+    /// Enables or disables zero-copy mode.
+    ///
+    /// - `Some(true)`: Enables `XDP_ZEROCOPY`.
+    /// - `Some(false)`: Enables `XDP_COPY`.
+    /// - `None`: The kernel's default behavior is used (typically copy mode).
     pub zero_copy: Option<bool>,
-    /// Force enable or disable huge pages for the UMEM. If `None`, they are used if available.
+    /// Enables or disables huge pages for the UMEM.
+    ///
+    /// - `Some(true)`: Attempts to use huge pages.
+    /// - `Some(false)`: Uses standard page sizes.
+    /// - `None`: The implementation default is used (typically standard pages).
     pub huge_page: Option<bool>,
-    /// Set the `XDP_USE_NEED_WAKEUP` flag. Defaults to `true` if `None`.
+    /// Sets the `XDP_USE_NEED_WAKEUP` flag.
+    ///
+    /// - `Some(true)`: The flag is set. The application must call `kick()` to wake up the kernel.
+    /// - `Some(false)`: The flag is not set. The kernel polls without needing a wakeup call.
+    /// - `None`: Defaults to `true`.
     pub need_wakeup: Option<bool>,
 }

@@ -63,8 +63,7 @@ pub fn write_udp_header_for(
     match builder.write(&mut HdrWrite(&mut hdr, 0), data) {
         Ok(_) => Ok(hdr),
         Err(e) => Err(io::Error::other(format!(
-            "Error writing packet header: {}",
-            e
+            "Error writing packet header: {e}",
         ))),
     }
 }
