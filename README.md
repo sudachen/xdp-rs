@@ -62,8 +62,4 @@ This crate is inherently `unsafe` because creating and managing AF_XDP sockets r
 
 ## License
 
-This project is licensed under either of
-
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or [http://opensource.org/licenses/MIT](http://opensource.org/licenses/MIT))
-
-at your option.
+This project is licensed under MIT license ([LICENSE-MIT](LICENSE-MIT) or [http://opensource.org/licenses/MIT](http://opensource.org/licenses/MIT))

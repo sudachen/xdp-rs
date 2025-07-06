@@ -6,7 +6,7 @@ resolver = "2"
 [workspace.package]
 authors = ["Alexey Sudachen"]
 edition = "2024"
-version = "0.1.0"
+version = "0.1.1"
 homepage = "https://github.com/sudachen/xdp-rs"
 license = "MIT"
 repository = "https://github.com/sudachen/xdp-rs"
