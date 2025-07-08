@@ -1,10 +1,20 @@
-## Motivation
+## XDP-Socket
 
-Existing XDP socket **crates** are often too high-level and complex. This **crate** provides a simple, low-level API to control an XDP socket efficiently and without extra overhead.
+This crate provides a simple and transparent Rust implementation of AF_XDP sockets. It is designed for applications that require direct, high-performance access to network interfaces, bypassing the kernel's networking stack to minimize syscalls and scheduler overhead.
+
+The core design philosophy is a minimalistic API, making it a flexible building block for integration with modern asynchronous ecosystems like tokio, mio, and quinn.
+
+The primary motivation for xdp-socket is to provide a networking foundation for building low-latency and high-throughput applications, with a particular focus on real-time Web3 infrastructure, such as:
+
+ - Peer-to-peer (P2P) data propagation layers
+
+ - High-performance RPC gateways
+
+ - Real-time indexing services
 
 ## API Design
 
-The **crate** provides two main socket types: `TxSocket` for sending (transmitting) data and `RxSocket` for receiving data. A bidirectional socket is handled as a pair of `TxSocket` and `RxSocket`.
+There are two main socket types: `TxSocket` for sending (transmitting) data and `RxSocket` for receiving data. A bidirectional socket is handled as a pair of `TxSocket` and `RxSocket`.
 
 Instead of a basic `send`/`recv` model, the main API uses a `seek`/`peek`/`commit` workflow. This gives you direct control over memory and how packets are handled. The behavior of these functions changes depending on whether you are sending or receiving.
 
@@ -39,14 +49,10 @@ Here is a basic example of how to create a `TxSocket` and send a UDP packet:
     let mut sok = xdp_socket::create_tx_socket(if_index, 0, None)
         .map_err(|e| io::Error::other(format!("Failed to create XDP socket: {e}")))?;
 
-    let mut bf = sok.seek_and_peek(42 + bytes.len()).map_err(|e|
+    let mut buf = sok.seek_and_peek(raw_packet_bytes_len).map_err(|e|
         io::Error::other(format!("Failed to seek and peek: {e}")))?;
 
-    PacketBuilder::ethernet2(src_mac, next_hop.mac_addr.unwrap())
-        .ipv4(src.ip().octets(), dst.ip().octets(), 64) // 64 is a common TTL
-        .udp(src.port(), dst.port())
-        .write(&mut bf, bytes)
-        .map_err(|e| io::Error::other(format!("Error writing packet header: {e}")))?;
+    // write packet data into the buffer
 
     sok.commit().map_err(|e| io::Error::other( format!("Failed to commit buffer in RX ring: {e}")))?;
     sok.kick()?;
@@ -62,4 +68,8 @@ This crate is inherently `unsafe` because creating and managing AF_XDP sockets r
 
 ## License
 
-This project is licensed under MIT license ([LICENSE-MIT](LICENSE-MIT) or [http://opensource.org/licenses/MIT](http://opensource.org/licenses/MIT))
+Licensed under either of the [MIT License](LICENSE-MIT) or the [Apache License, Version 2.0](LICENSE-APACHE) at your discretion. This project is dual-licensed to be compatible with the Rust project's licensing scheme and to give users maximum flexibility.
+
+### Contribution
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual-licensed as above, without any additional terms or conditions.
