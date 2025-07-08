@@ -118,7 +118,7 @@ mod tests {
         let src_port = 12345;
         let dst_port = 54321;
         let data = b"Hello, XDP!";
-        let hdr = crate::util::write_udp_header_for(
+        let hdr = super::write_udp_header_for(
             data, src_addr, src_mac, src_port, dst_addr, dst_mac, dst_port,
         )
             .unwrap();

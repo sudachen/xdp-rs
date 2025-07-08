@@ -46,16 +46,16 @@ xdp-socket = "0.1" # Replace with the latest version
 Here is a basic example of how to create a `TxSocket` and send a UDP packet:
 
 ```rust
-    let mut sok = xdp_socket::create_tx_socket(if_index, 0, None)
-        .map_err(|e| io::Error::other(format!("Failed to create XDP socket: {e}")))?;
+let mut sok = xdp_socket::create_tx_socket(if_index, 0, None)
+    .map_err(|e| io::Error::other(format!("Failed to create XDP socket: {e}")))?;
 
-    let mut buf = sok.seek_and_peek(raw_packet_bytes_len).map_err(|e|
-        io::Error::other(format!("Failed to seek and peek: {e}")))?;
+let mut buffer = sok.seek_and_peek(raw_packet_bytes_len).map_err(|e|
+    io::Error::other(format!("Failed to seek and peek: {e}")))?;
 
-    // write packet data into the buffer
+// ... write packet data into the buffer here ...
 
-    sok.commit().map_err(|e| io::Error::other( format!("Failed to commit buffer in RX ring: {e}")))?;
-    sok.kick()?;
+sok.commit_and_kick(1).map_err(|e| 
+    io::Error::other( format!("Failed to commit buffer in RX ring: {e}")))?;
 ```
 
 ## Safety
@@ -65,6 +65,16 @@ This crate is inherently `unsafe` because creating and managing AF_XDP sockets r
 1.  The application has the necessary capabilities (e.g., `CAP_NET_ADMIN`, `CAP_NET_RAW`, `CAP_BPF`) to create AF_XDP sockets.
 2.  The provided network interface index and queue ID are valid.
 3.  Memory is handled correctly, although the library provides safe abstractions where possible.
+
+
+## Requirements
+
+XDP-Socket requires a Linux kernel version of 5.10 or later.
+To build this crate, you'll need to have a libelf-dev, libbpf-dev, gcc-mulilib and linux-headers installed.
+
+```sh
+sudo apt-get install libelf-dev libbpf-dev gcc-mulilib linux-headers-$(uname -r)
+```
 
 ## License
 

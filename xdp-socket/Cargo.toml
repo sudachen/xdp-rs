@@ -17,21 +17,8 @@ workspace = true
 [dependencies]
 libc = { workspace = true }
 log = { workspace = true }
-ipnet = { version = "2.11.0" }
-prefix-trie = {  version = "0.8.1" }
-libbpf-sys = {  workspace = true }
-netlink-sys = { version = "0.8.7" }
-netlink-packet-route = {  version = "0.24.0" }
-netlink-packet-core = { version = "0.7.0"}
-etherparse = {  version = "0.18" }
 
 [dev-dependencies]
-eui48 = { version = "0.5.1" }
-env_logger = { workspace = true }
-tokio = { workspace = true, features = ["full"] }
-tokio-util = { workspace = true }
-exec = { version = "0.3.1" }
-caps = { workspace = true }
 
 [features]
 "no_safety_checks" = []

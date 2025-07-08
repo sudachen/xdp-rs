@@ -1,5 +1,5 @@
 [workspace]
-members = [ "xdp-socket", "xdp-tests" ]
+members = [ "xdp-socket", "xdp-tests" , "xdp-util"]
 
 resolver = "2"
 

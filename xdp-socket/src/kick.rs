@@ -2,30 +2,30 @@
 //!
 //! ## Purpose
 //!
-//! This file implements the `kick` method for the `Socket`. The purpose of this method
-//! is to notify the kernel that it needs to process packets in one of the XDP rings,
-//! especially when the `XDP_USE_NEED_WAKEUP` flag is in use.
+//! This file implements the `kick` method for the `Socket`. The purpose of this
+//! method is to notify the kernel to process packets in XDP rings, especially
+//! when `XDP_USE_NEED_WAKEUP` is in use.
 //!
 //! ## How it works
 //!
-//! The `kick` method checks if the `XDP_RING_NEED_WAKEUP` flag is set in the ring's
-//! flags field. If it is (or if the wakeup is manually enforced), it performs a syscall
-//! (`sendto` for TX, `recvfrom` for RX) with a zero-length buffer. This syscall does not
-//! transfer data but serves as a signal to wake up the kernel and prompt it to check the
-//! rings for new descriptors to process.
+//! The `kick` method checks the `XDP_RING_NEED_WAKEUP` flag in the ring's flags
+//! field. If set, it performs a zero-length `sendto` syscall to signal the kernel.
+//! This prompts the kernel to check the rings for new descriptors to process.
 //!
 //! ## Main components
 //!
-//! - `impl<const T:_Direction> Socket<T>`: An implementation block for the generic socket.
-//! - `kick()`: The public method that performs the wakeup call to the kernel.
+//! - `kick`: Main method to trigger kernel wakeup for XDP socket rings.
+
+#![allow(private_interfaces)]
+#![allow(private_bounds)]
 
 use std::{io, ptr};
 use std::sync::atomic::Ordering;
 
-use crate::socket::{_Direction, _RX, _TX, Socket};
+use crate::socket::{_Direction, Socket, Commit_, RingError};
 
 /// Implements the kernel wakeup logic for `Socket`.
-impl<const T: _Direction> Socket<T> {
+impl<const T: _Direction> Socket<T> where Socket<T>: Commit_<T>{
     /// Wakes up the kernel to process descriptors in the rings.
     ///
     /// This method is used to notify the kernel that it needs to process packets,
@@ -35,9 +35,8 @@ impl<const T: _Direction> Socket<T> {
     ///
     /// # How it works
     ///
-    /// It performs a `sendto` (for TX) or `recvfrom` (for RX) syscall with a
-    /// zero-length buffer. This syscall does not transfer any data but acts as a
-    /// signal to the kernel.
+    /// It performs a `sendto` syscall with a zero-length buffer. This syscall does not transfer
+    /// any data but acts as a signal to the kernel.
     ///
     /// # Returns
     ///
@@ -52,24 +51,14 @@ impl<const T: _Direction> Socket<T> {
 
         if need_wakeup {
             let ret = unsafe {
-                match T {
-                    _TX => libc::sendto(
-                        self.raw_fd,
-                        ptr::null(),
-                        0,
-                        libc::MSG_DONTWAIT | libc::MSG_NOSIGNAL,
-                        ptr::null(),
-                        0,
-                    ),
-                    _RX => libc::recvfrom(
-                        self.raw_fd,
-                        ptr::null_mut(),
-                        0,
-                        libc::MSG_DONTWAIT | libc::MSG_NOSIGNAL,
-                        ptr::null_mut(),
-                        ptr::null_mut(),
-                    ),
-                }
+                libc::sendto(
+                    self.raw_fd,
+                    ptr::null(),
+                    0,
+                    libc::MSG_DONTWAIT | libc::MSG_NOSIGNAL,
+                    ptr::null(),
+                    0,
+                )
             };
 
             if ret < 0 {
@@ -86,5 +75,23 @@ impl<const T: _Direction> Socket<T> {
             }
         }
         Ok(())
+    }
+
+    /// Commits a number of descriptors and notifies the kernel to process them.
+    ///
+    /// This method first calls `commit_` to commit `n` descriptors, and then
+    /// calls `kick` to notify the kernel to process the descriptors.  The
+    /// `commit_` method is used to finalize operations on descriptors and make
+    /// them available to the kernel, and the `kick` method is used to signal to
+    /// the kernel that it needs to process the descriptors.
+    ///
+    /// # Returns
+    ///
+    /// This method returns `Ok(())` on success.  If `commit_` fails, it returns
+    /// a `RingError`.  If `kick` fails, it maps the error to a `RingError` using
+    /// `RingError::Io`.
+    pub fn commit_and_kick(&mut self, n: usize) -> Result<(), RingError> {
+        self.commit_(n)?;
+        self.kick().map_err(|e| RingError::Io(e))
     }
 }

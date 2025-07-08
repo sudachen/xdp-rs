@@ -1,0 +1,24 @@
+[package]
+name = "xdp-util"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+readme.workspace = true
+
+[dependencies]
+ipnet = { version = "2.11.0" }
+prefix-trie = {  version = "0.8.1" }
+libbpf-sys = {  workspace = true }
+netlink-sys = { version = "0.8.7" }
+netlink-packet-route = {  version = "0.24.0" }
+netlink-packet-core = { version = "0.7.0"}
+etherparse = {  version = "0.18" }
+libc = { workspace = true }
+log = { workspace = true }
+
+[lints]
+workspace = true

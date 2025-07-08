@@ -4,7 +4,7 @@ use std::future::Future;
 use std::io::{Error, ErrorKind, Result};
 use std::net::Ipv4Addr;
 use std::str::FromStr as _;
-use xdp_socket::util::get_ipv4_address;
+use xdp_util::get_ipv4_address;
 
 pub const DEV_PREFIX: &str = "xdpVeth";
 pub const IP_PREFIX: &str = "192.168.77.";

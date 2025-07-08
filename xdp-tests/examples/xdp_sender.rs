@@ -2,7 +2,7 @@ use std::net::SocketAddrV4;
 use std::{io,time};
 use clap::Parser;
 use etherparse::PacketBuilder;
-use xdp_socket::util::{get_ipv4_address, mac_by_ifindex};
+use xdp_util::{get_ipv4_address, mac_by_ifindex, Router};
 use xdp_tests::xdp;
 
 #[derive(Parser, Debug)]
@@ -57,7 +57,7 @@ pub fn main() -> io::Result<()> {
             e
         })?;
 
-    let mut router = xdp_socket::util::Router::new(if_index);
+    let mut router = Router::new(if_index);
     router.refresh()?;
 
     let next_hop = router.route(dst.ip()).ok_or_else(||

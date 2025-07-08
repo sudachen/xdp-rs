@@ -1,6 +1,20 @@
 
 use std::io;
 
+/// Returns the MAC address of the network interface with the given index, or
+/// an error if the operation fails.
+///
+/// This function uses the `SIOCGIFNAME` and `SIOCGIFHWADDR` ioctls to retrieve
+/// the MAC address. It is not available on all platforms, and may fail for
+/// various reasons, such as the interface not existing or not supporting the
+/// operation.
+///
+/// # Safety
+///
+/// This function is unsafe because it calls the `ioctl` syscall, which is a
+/// low-level, platform-specific operation. It is also possible that the
+/// interface may be modified or removed while the function is running,
+/// causing the function to fail.
 pub fn mac_by_ifindex(if_index: u32) -> Result<[u8;6], io::Error> {
     unsafe {
         let socket_fd = libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0);
