@@ -7,7 +7,7 @@ homepage.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-readme.workspace = true
+readme = "README.md"
 
 [dependencies]
 ipnet = { version = "2.11.0" }
