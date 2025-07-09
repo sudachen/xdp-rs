@@ -1,5 +1,8 @@
 ## XDP-Socket
 
+[![crates.io](https://img.shields.io/crates/v/xdp-socket.svg)](https://crates.io/crates/xdp-socket)
+[![Documentation](https://docs.rs/xdp-socket/badge.svg)](https://docs.rs/xdp-socket)
+
 This crate provides a simple and transparent Rust implementation of AF_XDP sockets. It is designed for applications that require direct, high-performance access to network interfaces, bypassing the kernel's networking stack to minimize syscalls and scheduler overhead.
 
 The core design philosophy is a minimalistic API, making it a flexible building block for integration with modern asynchronous ecosystems like tokio, mio, and quinn.
