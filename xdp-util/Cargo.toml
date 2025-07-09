@@ -9,6 +9,8 @@ repository.workspace = true
 rust-version.workspace = true
 readme = "README.md"
 
+description = "Utility library for XDP sockets"
+
 [dependencies]
 ipnet = { version = "2.11.0" }
 prefix-trie = {  version = "0.8.1" }
