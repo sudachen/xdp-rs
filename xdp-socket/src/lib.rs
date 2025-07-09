@@ -1,5 +1,3 @@
-#![doc = include_str!("../../README.md")]
-
 // Public modules and re-exports
 pub mod create;
 pub mod mmap;
