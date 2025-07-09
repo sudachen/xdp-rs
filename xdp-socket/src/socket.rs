@@ -117,20 +117,8 @@ where
         inner: Option<Arc<Inner>>,
         mut x_ring: Ring<XdpDesc>,
         mut u_ring: Ring<u64>,
-        skip_frames: usize,
     ) -> Self {
         if let Some(inner) = inner {
-            match t {
-                _TX => {
-                    // all frames available for sending packets
-                    x_ring.fill(skip_frames as u32);
-                }
-                _RX => {
-                    // all frames available for receiving packets
-                    u_ring.fill(skip_frames as u32);
-                    u_ring.update_producer(u_ring.len as u32);
-                }
-            };
             let frames = inner.umem.0 as *mut u8;
             let raw_fd = inner.fd.as_raw_fd();
             Self {
@@ -146,42 +134,6 @@ where
         } else {
             Self::default()
         }
-    }
-
-    /// Waits for the socket to become ready for I/O, blocking until an event occurs.
-    ///
-    /// This function uses `poll` to wait for the socket's file descriptor to become
-    /// ready. For a `TxSocket`, it waits for `POLLOUT` (writable). For an `RxSocket`,
-    /// it waits for `POLLIN` (readable).
-    ///
-    /// # Arguments
-    ///
-    /// * `_timeout` - An optional timeout. If `None`, it blocks indefinitely.
-    ///
-    /// # Returns
-    ///
-    /// An `io::Result` indicating success or failure.
-    pub fn poll_wait(&self, _timeout: Option<Duration>) -> Result<(), io::Error> {
-        self.kick()?;
-        let mask = match t {
-            _TX => libc::POLLOUT,
-            _RX => libc::POLLIN,
-        };
-        unsafe {
-            loop {
-                let mut fds = [libc::pollfd {
-                    events: mask,
-                    revents: 0,
-                    fd: self.raw_fd,
-                }];
-                if 0 > libc::poll(fds.as_mut_ptr(), 1, -1) {
-                    //..
-                } else if (fds[0].revents & mask) != 0 {
-                    break;
-                }
-            }
-        }
-        Ok(())
     }
     
     /// Ensures that at least one descriptor is available for the next operation and

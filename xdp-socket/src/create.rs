@@ -25,8 +25,8 @@
 //! - `XdpConfig`, `Direction`: Public structs and enums for socket configuration.
 
 use crate::mmap::OwnedMmap;
-use crate::ring::{FRAME_COUNT, FRAME_SIZE, Ring, RingType};
-use crate::socket::{Inner, RxSocket, TxSocket};
+use crate::ring::{FRAME_COUNT, FRAME_SIZE, Ring, RingType, XdpDesc};
+use crate::socket::{_RX, _TX, Inner, RxSocket, TxSocket};
 use std::io;
 use std::mem::size_of;
 use std::os::fd::{FromRawFd as _, OwnedFd};
@@ -94,12 +94,17 @@ pub fn create_socket(
     let offsets = ring_offsets(raw_fd)?;
 
     // Mapping Tx rings in case of Tx and Both direction
-    let (tx_ring, c_ring) = if direction == Direction::Rx {
+    let (c_ring, tx_ring) = if direction == Direction::Rx {
         (Ring::default(), Ring::default())
     } else {
         (
-            RingType::Tx.mmap(raw_fd, &offsets, tx_ring_size)?,
             RingType::Completion.mmap(raw_fd, &offsets, tx_ring_size)?,
+            {
+                let mut tx_ring: Ring<XdpDesc> =
+                    RingType::Tx.mmap(raw_fd, &offsets, tx_ring_size)?;
+                tx_ring.fill(0);
+                tx_ring
+            },
         )
     };
 
@@ -107,10 +112,12 @@ pub fn create_socket(
     let (rx_ring, f_ring) = if direction == Direction::Tx {
         (Ring::default(), Ring::default())
     } else {
-        (
-            RingType::Rx.mmap(raw_fd, &offsets, rx_ring_size)?,
-            RingType::Fill.mmap(raw_fd, &offsets, rx_ring_size)?,
-        )
+        (RingType::Rx.mmap(raw_fd, &offsets, rx_ring_size)?, {
+            let mut f_ring: Ring<u64> = RingType::Fill.mmap(raw_fd, &offsets, rx_ring_size)?;
+            f_ring.fill(tx_ring_size as u32);
+            f_ring.update_producer(f_ring.len as u32);
+            f_ring
+        })
     };
 
     let zero_copy = match config.and_then(|cfg| cfg.zero_copy) {
@@ -150,21 +157,16 @@ pub fn create_socket(
     // that we can share between Tx and Rx sockets
     // to release it when both are destroyed
     #[allow(clippy::arc_with_non_send_sync)]
-    let inner = Arc::new(Inner::new(umem,fd));
+    let inner = Arc::new(Inner::new(umem, fd));
 
     let tx_socket = if direction != Direction::Rx {
-        Some(TxSocket::new(Some(inner.clone()), tx_ring, c_ring, 0))
+        Some(TxSocket::new(Some(inner.clone()), tx_ring, c_ring))
     } else {
         None
     };
 
     let rx_socket = if direction != Direction::Tx {
-        Some(RxSocket::new(
-            Some(inner.clone()),
-            rx_ring,
-            f_ring,
-            tx_ring_size,
-        ))
+        Some(RxSocket::new(Some(inner.clone()), rx_ring, f_ring))
     } else {
         None
     };

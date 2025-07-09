@@ -1,13 +1,13 @@
 #![doc = include_str!("../../README.md")]
 
 // Public modules and re-exports
-pub mod create_socket;
+pub mod create;
 pub mod mmap;
 pub mod ring;
 pub mod socket;
 
 
-pub use create_socket::{
+pub use create::{
     create_bi_socket, create_rx_socket, create_socket, create_tx_socket, Direction, XdpConfig,
 };
 pub use socket::Socket;
@@ -21,4 +21,10 @@ pub mod kick;
 pub mod seek;
 #[doc(hidden)]
 pub mod send;
-mod peek;
+pub mod peek;
+pub mod poll;
+
+pub use {
+    send::SendExt,
+    poll::PollWaitExt,
+};

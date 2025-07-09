@@ -37,19 +37,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     loop {
         let (len, peer) = socket.recv_from(&mut buf).await?;
-        let message = match str::from_utf8(&buf[..len]) {
+        let msg = match str::from_utf8(&buf[..len]) {
             Ok(s) => s.trim(),
             Err(_) => {
                 log::warn!("Received non-UTF8 data from {peer}");
                 continue;
             }
         };
-
-        log::debug!("Received {len} bytes from {peer}: {message}");
-
-        if message == "PING" {
-            log::info!("Received PING from {peer}, sending PONG");
-            socket.send_to(b"PONG", peer).await?;
-        }
+        log::info!("Received '{msg}' from {peer}, sending back");
+        socket.send_to(&buf[..len], peer).await?;
     }
 }
