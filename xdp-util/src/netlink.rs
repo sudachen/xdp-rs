@@ -347,4 +347,3 @@ pub fn find_default_gateway(routes: &[Ipv4Route]) -> Option<Gateway> {
             priority,
         })
 }
-

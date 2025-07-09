@@ -36,11 +36,10 @@
 
 use crate::mmap::OwnedMmap;
 use crate::ring::{Ring, XdpDesc};
-use std::os::fd::{AsRawFd as _, OwnedFd};
-use std::{io, ptr};
 use std::fmt::Display;
+use std::os::fd::{AsRawFd as _, OwnedFd};
 use std::sync::Arc;
-use std::time::Duration;
+use std::{io, ptr};
 
 /// A high-level interface for an AF_XDP socket.
 ///
@@ -95,7 +94,6 @@ impl Display for RingError {
     }
 }
 
-
 impl<const t: _Direction> Socket<t>
 where
     Socket<t>: Seek_<t> + Commit_<t> + Send,
@@ -113,11 +111,7 @@ where
     /// * `x_ring` - The TX or RX ring.
     /// * `u_ring` - The Completion or Fill ring.
     /// * `skip_frames` - The number of frames to skip at the start of the UMEM.
-    pub(crate) fn new(
-        inner: Option<Arc<Inner>>,
-        mut x_ring: Ring<XdpDesc>,
-        mut u_ring: Ring<u64>,
-    ) -> Self {
+    pub(crate) fn new(inner: Option<Arc<Inner>>, x_ring: Ring<XdpDesc>, u_ring: Ring<u64>) -> Self {
         if let Some(inner) = inner {
             let frames = inner.umem.0 as *mut u8;
             let raw_fd = inner.fd.as_raw_fd();
@@ -135,7 +129,7 @@ where
             Self::default()
         }
     }
-    
+
     /// Ensures that at least one descriptor is available for the next operation and
     /// returns the total number of available descriptors.
     ///
@@ -204,7 +198,6 @@ where
         self.commit_(n)
     }
 
-
     /// Returns the size of a single frame in the UMEM.
     ///
     /// # Returns
@@ -219,8 +212,7 @@ where
 // socket refers to shared mapped memory owned by _inner and rings
 //  so all pointers can be safely send over threads
 //  until mapped memory is alive
-unsafe impl<const t:_Direction> Send for Socket<t> {}
-
+unsafe impl<const t: _Direction> Send for Socket<t> {}
 
 /// A boolean flag indicating the direction of the socket (`true` for TX, `false` for RX).
 pub type _Direction = bool;
@@ -247,7 +239,7 @@ impl<const t: _Direction> Default for Socket<t> {
             producer: 0,
             consumer: 0,
             frames: ptr::null_mut(),
-            raw_fd: 0
+            raw_fd: 0,
         }
     }
 }

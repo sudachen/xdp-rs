@@ -19,13 +19,16 @@
 #![allow(private_interfaces)]
 #![allow(private_bounds)]
 
-use std::{io, ptr};
 use std::sync::atomic::Ordering;
+use std::{io, ptr};
 
-use crate::socket::{_Direction, Socket, Commit_, RingError};
+use crate::socket::{_Direction, Commit_, RingError, Socket};
 
 /// Implements the kernel wakeup logic for `Socket`.
-impl<const T: _Direction> Socket<T> where Socket<T>: Commit_<T>{
+impl<const T: _Direction> Socket<T>
+where
+    Socket<T>: Commit_<T>,
+{
     /// Wakes up the kernel to process descriptors in the rings.
     ///
     /// This method is used to notify the kernel that it needs to process packets,
@@ -45,9 +48,8 @@ impl<const T: _Direction> Socket<T> where Socket<T>: Commit_<T>{
     /// logged for `ENETDOWN`.
     pub fn kick(&self) -> Result<(), io::Error> {
         let need_wakeup = unsafe {
-                (*self.x_ring.mmap.flags).load(Ordering::Relaxed) & libc::XDP_RING_NEED_WAKEUP
-                    != 0
-            };
+            (*self.x_ring.mmap.flags).load(Ordering::Relaxed) & libc::XDP_RING_NEED_WAKEUP != 0
+        };
 
         if need_wakeup {
             let ret = unsafe {
@@ -92,6 +94,6 @@ impl<const T: _Direction> Socket<T> where Socket<T>: Commit_<T>{
     /// `RingError::Io`.
     pub fn commit_and_kick(&mut self, n: usize) -> Result<(), RingError> {
         self.commit_(n)?;
-        self.kick().map_err(|e| RingError::Io(e))
+        self.kick().map_err(RingError::Io)
     }
 }

@@ -1,5 +1,5 @@
-use std::fmt::{Debug, Display};
 use crate::nettest::suite::vethpair;
+use std::fmt::{Debug, Display};
 use std::future::Future;
 use std::io::{Error, ErrorKind, Result};
 use std::net::Ipv4Addr;
@@ -9,7 +9,7 @@ use xdp_util::get_ipv4_address;
 pub const DEV_PREFIX: &str = "xdpVeth";
 pub const IP_PREFIX: &str = "192.168.77.";
 
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct Host {
     pub if_dev: String,
     pub ip_str: String,
@@ -41,12 +41,19 @@ impl Display for Host {
 impl Host {
     pub fn new(if_dev: String, ip_str: String) -> Self {
         let ip_addr = Ipv4Addr::from_str(&ip_str).expect("Invalid IP address format");
-        let if_index = get_ipv4_address(None).unwrap()
+        let if_index = get_ipv4_address(None)
+            .unwrap()
             .iter()
             .find(|(addr, _)| *addr == ip_addr)
-            .ok_or_else(|| Error::other(format!("Source IP {} not found", ip_addr))).unwrap()
+            .ok_or_else(|| Error::other(format!("Source IP {} not found", ip_addr)))
+            .unwrap()
             .1;
-        Host { if_dev, ip_str, ip_addr, if_index }
+        Host {
+            if_dev,
+            ip_str,
+            ip_addr,
+            if_index,
+        }
     }
 }
 

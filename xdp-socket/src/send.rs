@@ -24,8 +24,8 @@
 //! - `send_blocking()`: A blocking method that sends data and waits for the operation
 //!   to be acknowledged by the kernel.
 
-use crate::socket::{RingError,_TX,Socket, Seek_, Commit_};
 use crate::poll::PollWaitExt;
+use crate::socket::{_TX, Commit_, RingError, Seek_, Socket};
 
 /// A trait for high-level packet sending operations on XDP transmit sockets.
 ///
@@ -49,7 +49,7 @@ use crate::poll::PollWaitExt;
 /// # Example
 ///
 /// ```rust
-/// use xdp_socket::{create_tx_socket, SendExt};
+/// use xdp_socket::{create_tx_socket, SendExt as _ };
 /// let mut tx = create_tx_socket(...)?;
 /// tx.send(b"hello", None)?;
 /// ```
@@ -60,8 +60,10 @@ pub trait SendExt {
 
 /// An implementation block for the transmit socket (`TxSocket`) that provides
 /// high-level sending methods.
-impl SendExt for Socket<_TX> where Socket<_TX>: Seek_<_TX> + Commit_<_TX> + PollWaitExt<_TX> {
-
+impl SendExt for Socket<_TX>
+where
+    Socket<_TX>: Seek_<_TX> + Commit_<_TX> + PollWaitExt<_TX>,
+{
     /// Sends a packet in a non-blocking manner.
     ///
     /// This method copies the provided data into a UMEM frame that has been

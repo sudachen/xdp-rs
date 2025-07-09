@@ -17,8 +17,8 @@
 //   - The test succeeds if the ping-pong communication completes successfully.
 //
 
-pub mod toolkit;
 pub mod nettest;
+pub mod toolkit;
 pub mod xdp;
 
 use nettest::suite::{command, runner};
@@ -37,15 +37,18 @@ pub async fn main() -> Result<()> {
 
         log::debug!("setting up DXP pass on host {}", host_pair.host0);
         /*let _owned_xdp_host0 =
-            xdp::attach_pass_program(host_pair.host0.if_index).map_err(|e| {
-                log::error!("Failed to attach XDP pass program on {}: {}", host_pair.host0, e);
+        xdp::attach_pass_program(host_pair.host0.if_index).map_err(|e| {
+            log::error!("Failed to attach XDP pass program on {}: {}", host_pair.host0, e);
+            e
+        })?;*/
+        let _owned_xdp_host1 = xdp::attach_pass_program(host_pair.host1.if_index).map_err(|e| {
+            log::error!(
+                "Failed to attach XDP pass program on {}: {}",
+                host_pair.host1,
                 e
-            })?;*/
-        let _owned_xdp_host1 =
-            xdp::attach_pass_program(host_pair.host1.if_index).map_err(|e| {
-                log::error!("Failed to attach XDP pass program on {}: {}", host_pair.host1, e);
-                e
-            })?;
+            );
+            e
+        })?;
 
         log::info!("starting pong host on {}", host_pair.host1.if_dev);
         let host1_ip = host_pair.host1.ip_str.clone();

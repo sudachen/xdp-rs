@@ -2,16 +2,19 @@ use std::io::{Error, Result};
 use std::net::Ipv4Addr;
 use std::str::FromStr as _;
 use std::time;
-use xdp_socket::{create_tx_socket, SendExt};
+use xdp_socket::{SendExt as _, create_tx_socket};
 use xdp_util::{Neighbor, Router, get_ipv4_address, write_udp_header_for};
 
 pub fn run_pinger(src_ip: &str, src_port: u16, dst_ip: &str, dst_port: u16) -> Result<()> {
-    let src_addr = Ipv4Addr::from_str(src_ip)
-        .map_err(|e| Error::other(format!("invalid IP address: {e}")))?;
-    let dst_addr = Ipv4Addr::from_str(dst_ip)
-        .map_err(|e| Error::other(format!("invalid IP address: {e}")))?;
-    eprintln!("Addresses: {:#?} ", get_ipv4_address(None)
-        .map_err(|e| Error::other(format!("Failed to get IP address: {e}")))?);
+    let src_addr =
+        Ipv4Addr::from_str(src_ip).map_err(|e| Error::other(format!("invalid IP address: {e}")))?;
+    let dst_addr =
+        Ipv4Addr::from_str(dst_ip).map_err(|e| Error::other(format!("invalid IP address: {e}")))?;
+    eprintln!(
+        "Addresses: {:#?} ",
+        get_ipv4_address(None)
+            .map_err(|e| Error::other(format!("Failed to get IP address: {e}")))?
+    );
     let if_index = get_ipv4_address(None)?
         .iter()
         .find(|(addr, _)| *addr == src_addr)
@@ -25,7 +28,7 @@ pub fn run_pinger(src_ip: &str, src_port: u16, dst_ip: &str, dst_port: u16) -> R
         .map_err(|e| Error::other(format!("invalid MAC address: {e}")))?
         .to_array();
 
-    let mut socket = create_tx_socket(if_index,0,None)
+    let mut socket = create_tx_socket(if_index, 0, None)
         .map_err(|e| Error::other(format!("Failed to create XDP socket: {e}")))?;
 
     log::debug!("Create router for interface index {if_index}");

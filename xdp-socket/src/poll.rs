@@ -24,9 +24,11 @@
 //! - `poll_wait()`: A method to block until a socket becomes ready for I/O.
 //!
 
+#![allow(non_upper_case_globals)]
+
+use crate::socket::{_Direction, _RX, _TX, Commit_, Socket};
 use std::io;
 use std::time::Duration;
-use crate::socket::{_Direction, Socket, _TX, _RX, Commit_};
 
 /// A trait for polling XDP sockets for readiness events.
 ///
@@ -42,15 +44,18 @@ use crate::socket::{_Direction, Socket, _TX, _RX, Commit_};
 /// # Example
 ///
 /// ```rust
-/// use xdp_socket::PollWaitExt;
+/// use xdp_socket::{ create_socket, PollWaitExt as _ } ;
 /// let socket = ...; // your Socket<_TX> or Socket<_RX>
 /// socket.poll_wait(Some(std::time::Duration::from_secs(1)))?;
 /// ```
-pub trait PollWaitExt<const t:_Direction> {
+pub trait PollWaitExt<const t: _Direction> {
     fn poll_wait(&self, _timeout: Option<Duration>) -> Result<(), io::Error>;
 }
 
-impl<const t:_Direction> PollWaitExt<t> for Socket<t> where Socket<t>: Commit_<t> {
+impl<const t: _Direction> PollWaitExt<t> for Socket<t>
+where
+    Socket<t>: Commit_<t>,
+{
     /// Waits for the socket to become ready for I/O, blocking until an event occurs.
     ///
     /// This function uses `poll` to wait for the socket's file descriptor to become

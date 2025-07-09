@@ -3,7 +3,9 @@ use std::io::{Error, ErrorKind, Result};
 
 pub fn setup_pair(dev_prefix: &str, ip_prefix: &str) -> Result<()> {
     log::info!("creating new veth pair {dev_prefix}0 + {dev_prefix}1");
-    execute_sudo_command(&format!("ip link add {dev_prefix}0 type veth peer {dev_prefix}1"))?;
+    execute_sudo_command(&format!(
+        "ip link add {dev_prefix}0 type veth peer {dev_prefix}1"
+    ))?;
     up_pair(dev_prefix, ip_prefix)?;
     Ok(())
 }

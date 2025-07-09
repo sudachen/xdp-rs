@@ -50,7 +50,6 @@ pub struct RingMmap<T> {
     pub flags: *mut AtomicU32,
 }
 
-
 impl<T> Default for RingMmap<T> {
     fn default() -> Self {
         RingMmap {
@@ -154,9 +153,7 @@ where
     ///
     /// Flags can indicate states like `XDP_RING_NEED_WAKEUP`.
     pub fn flags(&self) -> u32 {
-        unsafe {
-            (*self.mmap.flags).load(std::sync::atomic::Ordering::Acquire)
-        }
+        unsafe { (*self.mmap.flags).load(std::sync::atomic::Ordering::Acquire) }
     }
     /// Increments a value, wrapping it around the ring size.
     pub fn increment(&self, value: &mut u32) -> u32 {
@@ -226,14 +223,14 @@ impl Ring<XdpDesc> {
     ///
     /// This function will panic in debug builds if the index or length are out of bounds.
     pub(crate) fn mut_bytes_at(&mut self, ptr: *mut u8, index: u32, len: usize) -> &mut [u8] {
-        #[cfg(not(feature="no_safety_checks"))]
+        #[cfg(not(feature = "no_safety_checks"))]
         assert!(index < FRAME_COUNT as u32);
-        #[cfg(not(feature="no_safety_checks"))]
+        #[cfg(not(feature = "no_safety_checks"))]
         assert!((len as u32) < FRAME_SIZE as u32);
 
         let desc = self.mut_desc_at(index);
 
-        #[cfg(not(feature="no_safety_checks"))]
+        #[cfg(not(feature = "no_safety_checks"))]
         assert!(FRAME_SIZE * FRAME_COUNT > desc.addr as usize + len);
 
         unsafe {
@@ -247,9 +244,9 @@ impl Ring<XdpDesc> {
     ///
     /// The address is calculated based on the index and frame size.
     pub fn set(&mut self, index: u32, len: u32) {
-        #[cfg(not(feature="no_safety_checks"))]
+        #[cfg(not(feature = "no_safety_checks"))]
         assert!(index < FRAME_COUNT as u32);
-        #[cfg(not(feature="no_safety_checks"))]
+        #[cfg(not(feature = "no_safety_checks"))]
         assert!(len < FRAME_SIZE as u32);
 
         let desc = self.mut_desc_at(index);

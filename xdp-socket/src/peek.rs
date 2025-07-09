@@ -31,9 +31,12 @@
 #![allow(private_interfaces)]
 #![allow(private_bounds)]
 
-use crate::socket::{Socket, _TX, _RX, Seek_, RingError};
+use crate::socket::{_RX, _TX, RingError, Seek_, Socket};
 
-impl Socket<_TX> where Socket<_TX>: Seek_<_TX> {
+impl Socket<_TX>
+where
+    Socket<_TX>: Seek_<_TX>,
+{
     /// Peeks at the `index`-th available chunk in the ring without advancing the head.
     ///
     /// This function finds the `index`-th descriptor in the range of AVAILABLE descriptors
@@ -48,11 +51,11 @@ impl Socket<_TX> where Socket<_TX>: Seek_<_TX> {
     ///
     /// A `Result` containing a mutable byte slice and its corresponding descriptor index.
     fn peek_(&mut self, index: usize, len: usize) -> Result<&mut [u8], RingError> {
-        #[cfg(not(feature="no_safety_checks"))]
+        #[cfg(not(feature = "no_safety_checks"))]
         if index >= self.available as usize {
             return Err(RingError::InvalidIndex);
         }
-        #[cfg(not(feature="no_safety_checks"))]
+        #[cfg(not(feature = "no_safety_checks"))]
         if len > self.x_ring.frame_size() as usize {
             return Err(RingError::InvalidLength);
         }
@@ -115,7 +118,10 @@ impl Socket<_TX> where Socket<_TX>: Seek_<_TX> {
     }
 }
 
-impl Socket<_RX> where Socket<_RX>: Seek_<_RX> {
+impl Socket<_RX>
+where
+    Socket<_RX>: Seek_<_RX>,
+{
     /// Peeks at the `index`-th available chunk in the ring without advancing the head.
     ///
     /// This function finds the `index`-th descriptor in the range of available descriptors
@@ -129,7 +135,7 @@ impl Socket<_RX> where Socket<_RX>: Seek_<_RX> {
     ///
     /// A `Result` containing a byte slice and its corresponding descriptor index.
     fn peek_(&mut self, index: usize) -> Result<&[u8], RingError> {
-        #[cfg(not(feature="no_safety_checks"))]
+        #[cfg(not(feature = "no_safety_checks"))]
         if index >= self.available as usize {
             return Err(RingError::InvalidIndex);
         }
@@ -163,7 +169,7 @@ impl Socket<_RX> where Socket<_RX>: Seek_<_RX> {
     ///
     /// A `Result` containing a byte slice and its corresponding descriptor index.
     #[inline]
-    pub fn peek_at(&mut self, index:usize) -> Result<&[u8], RingError> {
+    pub fn peek_at(&mut self, index: usize) -> Result<&[u8], RingError> {
         self.peek_(index)
     }
 

@@ -26,7 +26,7 @@
 
 use crate::mmap::OwnedMmap;
 use crate::ring::{FRAME_COUNT, FRAME_SIZE, Ring, RingType, XdpDesc};
-use crate::socket::{_RX, _TX, Inner, RxSocket, TxSocket};
+use crate::socket::{Inner, RxSocket, TxSocket};
 use std::io;
 use std::mem::size_of;
 use std::os::fd::{FromRawFd as _, OwnedFd};

@@ -21,9 +21,7 @@ pub fn run_pinger(local_addr: &str, remote_addr: &str) -> io::Result<()> {
                 log::debug!("[UDP_Pinger] Success! Received 'PONG' from {remote_addr}");
             } else {
                 let received_str = String::from_utf8_lossy(message);
-                log::error!(
-                    "[UDP_Pinger] Received unexpected message: '{received_str}'"
-                );
+                log::error!("[UDP_Pinger] Received unexpected message: '{received_str}'");
             }
         }
         Err(e) if e.kind() == io::ErrorKind::WouldBlock || e.kind() == io::ErrorKind::TimedOut => {
@@ -49,15 +47,11 @@ pub fn run_ponger(local_addr: &str, _token: CancellationToken) -> io::Result<()>
             Ok((number_of_bytes, src_addr)) => {
                 let message = &buffer[..number_of_bytes];
                 if message == b"PING" {
-                    log::debug!(
-                        "[UDP_Ponger] Received 'PING' from {src_addr}. Responding..."
-                    );
+                    log::debug!("[UDP_Ponger] Received 'PING' from {src_addr}. Responding...");
                     socket.send_to(b"PONG", src_addr)?;
                 } else {
                     let received_str = String::from_utf8_lossy(message);
-                    log::debug!(
-                        "[UDP_Ponger] Received unexpected: '{received_str}'. Ignoring."
-                    );
+                    log::debug!("[UDP_Ponger] Received unexpected: '{received_str}'. Ignoring.");
                 }
                 break;
             }

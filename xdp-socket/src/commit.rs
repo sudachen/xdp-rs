@@ -28,7 +28,7 @@
 //! - `impl Commit_<_RX> for Socket<_RX>`: The implementation of the commit logic
 //!   for the receive socket.
 
-use crate::socket::{RingError, Socket, Commit_, _TX, _RX};
+use crate::socket::{_RX, _TX, Commit_, RingError, Socket};
 
 /// Implements the commit logic for a transmit (`TX`) socket.
 impl Commit_<_TX> for Socket<_TX> {
@@ -51,7 +51,7 @@ impl Commit_<_TX> for Socket<_TX> {
     ///
     /// Returns `RingError::NotAvailable` if there are not enough available frames to commit.
     fn commit_(&mut self, count: usize) -> Result<(), RingError> {
-        #[cfg(not(feature="no_safety_checks"))]
+        #[cfg(not(feature = "no_safety_checks"))]
         if self.available < count as u32 {
             return Err(RingError::NotAvailable);
         }
@@ -83,7 +83,7 @@ impl Commit_<_RX> for Socket<_RX> {
     /// Returns `RingError::NotAvailable` if `count` is greater than the number of
     /// packets available to be read.
     fn commit_(&mut self, count: usize) -> Result<(), RingError> {
-        #[cfg(not(feature="no_safety_checks"))]
+        #[cfg(not(feature = "no_safety_checks"))]
         if self.available < count as u32 {
             return Err(RingError::NotAvailable);
         }

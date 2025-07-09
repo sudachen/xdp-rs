@@ -105,9 +105,9 @@ impl io::Write for HdrWrite<'_> {
 //
 #[cfg(test)]
 mod tests {
-    use std::net::Ipv4Addr;
     use super::HdrWrite;
     use std::io::Write;
+    use std::net::Ipv4Addr;
 
     #[test]
     fn test_write_udp_header() {
@@ -121,7 +121,7 @@ mod tests {
         let hdr = super::write_udp_header_for(
             data, src_addr, src_mac, src_port, dst_addr, dst_mac, dst_port,
         )
-            .unwrap();
+        .unwrap();
         assert_eq!(hdr.len(), 42);
         let mut buf = [0u8; 42 + 11];
         buf[..42].clone_from_slice(&hdr);

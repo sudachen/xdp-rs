@@ -1,4 +1,3 @@
-
 use std::io;
 
 /// Returns the MAC address of the network interface with the given index, or
@@ -15,7 +14,7 @@ use std::io;
 /// low-level, platform-specific operation. It is also possible that the
 /// interface may be modified or removed while the function is running,
 /// causing the function to fail.
-pub fn mac_by_ifindex(if_index: u32) -> Result<[u8;6], io::Error> {
+pub fn mac_by_ifindex(if_index: u32) -> Result<[u8; 6], io::Error> {
     unsafe {
         let socket_fd = libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0);
         if socket_fd < 0 {
@@ -33,7 +32,7 @@ pub fn mac_by_ifindex(if_index: u32) -> Result<[u8;6], io::Error> {
             return Err(io::Error::last_os_error());
         }
         libc::close(socket_fd);
-        let mut result = [0u8;6];
+        let mut result = [0u8; 6];
         for (i, v) in if_req.ifr_ifru.ifru_hwaddr.sa_data[..6].iter().enumerate() {
             result[i] = *v as u8;
         }

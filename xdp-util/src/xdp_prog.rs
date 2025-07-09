@@ -66,7 +66,7 @@ pub struct OwnedXdpProg {
     pub code: &'static [u8],
     pub name: &'static str,
     pub bpf_obj: *mut libbpf_sys::bpf_object,
-    pub bpf_link: *mut libbpf_sys::bpf_link
+    pub bpf_link: *mut libbpf_sys::bpf_link,
 }
 
 impl Drop for OwnedXdpProg {
@@ -97,8 +97,11 @@ impl Drop for OwnedXdpProg {
 /// On success, returns an `OwnedXdpProg` which manages the lifecycle of the
 /// attached program. When this struct is dropped, the program will be detached.
 /// On failure, returns an `io::Error`.
-pub fn xdp_attach_program(if_index: u32, code: &'static [u8], name: &'static str) -> io::Result<OwnedXdpProg> {
-
+pub fn xdp_attach_program(
+    if_index: u32,
+    code: &'static [u8],
+    name: &'static str,
+) -> io::Result<OwnedXdpProg> {
     let mut owned_prog = OwnedXdpProg {
         if_index,
         code,
@@ -108,7 +111,7 @@ pub fn xdp_attach_program(if_index: u32, code: &'static [u8], name: &'static str
     };
 
     let bpf_obj = &mut owned_prog.bpf_obj;
-    let bpf_link= &mut owned_prog.bpf_link;
+    let bpf_link = &mut owned_prog.bpf_link;
 
     unsafe {
         let mut opts: libbpf_sys::bpf_object_open_opts = std::mem::zeroed();
@@ -131,7 +134,9 @@ pub fn xdp_attach_program(if_index: u32, code: &'static [u8], name: &'static str
         let bpf_prog =
             libbpf_sys::bpf_object__find_program_by_name(*bpf_obj, prog_name_cstr.as_ptr());
         if bpf_prog.is_null() {
-            return Err(io::Error::other(format!("Failed to find BPF program '{name}'")));
+            return Err(io::Error::other(format!(
+                "Failed to find BPF program '{name}'"
+            )));
         }
 
         *bpf_link = libbpf_sys::bpf_program__attach_xdp(bpf_prog, if_index as i32);
