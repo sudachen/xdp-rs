@@ -117,7 +117,7 @@ where
             let raw_fd = inner.fd.as_raw_fd();
             Self {
                 frames,
-                available: x_ring.len as u32,
+                available: if t { x_ring.len as u32 } else { 0 },
                 producer: 0,
                 consumer: 0,
                 raw_fd,

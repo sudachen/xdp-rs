@@ -91,7 +91,7 @@ impl Commit_<_RX> for Socket<_RX> {
         let x_ring = &mut self.x_ring;
         for _ in 0..(count as u32) {
             let addr = x_ring.desc_at(self.consumer & x_ring.mod_mask).addr;
-            *f_ring.mut_desc_at(self.producer & x_ring.mod_mask) = addr;
+            *f_ring.mut_desc_at(self.producer & f_ring.mod_mask) = addr;
             self.consumer = self.consumer.wrapping_add(1);
             self.producer = self.producer.wrapping_add(1);
         }
